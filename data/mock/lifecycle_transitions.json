@@ -1,0 +1,419 @@
+[
+  {
+    "id": 1,
+    "campaignId": 101,
+    "entity": "CAMPAIGN",
+    "entityId": 101,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 2,
+    "campaignId": 102,
+    "entity": "CAMPAIGN",
+    "entityId": 102,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 3,
+    "campaignId": 102,
+    "entity": "CAMPAIGN",
+    "entityId": 102,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 4,
+    "campaignId": 102,
+    "entity": "CAMPAIGN",
+    "entityId": 102,
+    "action": "APPROVE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": null
+  },
+  {
+    "id": 5,
+    "campaignId": 102,
+    "entity": "CAMPAIGN",
+    "entityId": 102,
+    "action": "ACTIVATE",
+    "changes": null,
+    "at": "2026-10-23T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 6,
+    "campaignId": 103,
+    "entity": "CAMPAIGN",
+    "entityId": 103,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 7,
+    "campaignId": 103,
+    "entity": "CAMPAIGN",
+    "entityId": 103,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 8,
+    "campaignId": 104,
+    "entity": "CAMPAIGN",
+    "entityId": 104,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 9,
+    "campaignId": 104,
+    "entity": "CAMPAIGN",
+    "entityId": 104,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 10,
+    "campaignId": 104,
+    "entity": "CAMPAIGN",
+    "entityId": 104,
+    "action": "DECLINE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": "Креативы настроены не для всех мест показа; добавьте теги кампании"
+  },
+  {
+    "id": 11,
+    "campaignId": 106,
+    "entity": "CAMPAIGN",
+    "entityId": 106,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 12,
+    "campaignId": 106,
+    "entity": "CAMPAIGN",
+    "entityId": 106,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 13,
+    "campaignId": 106,
+    "entity": "CAMPAIGN",
+    "entityId": 106,
+    "action": "APPROVE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": null
+  },
+  {
+    "id": 14,
+    "campaignId": 106,
+    "entity": "CAMPAIGN",
+    "entityId": 106,
+    "action": "ACTIVATE",
+    "changes": null,
+    "at": "2026-10-23T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 15,
+    "campaignId": 106,
+    "entity": "CAMPAIGN",
+    "entityId": 106,
+    "action": "UPDATE",
+    "changes": {
+      "marketingName": {
+        "from": null,
+        "to": "Отдохни и получи кэшбэк"
+      }
+    },
+    "at": "2026-10-24T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 16,
+    "campaignId": 107,
+    "entity": "CAMPAIGN",
+    "entityId": 107,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 17,
+    "campaignId": 107,
+    "entity": "CAMPAIGN",
+    "entityId": 107,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 18,
+    "campaignId": 107,
+    "entity": "CAMPAIGN",
+    "entityId": 107,
+    "action": "APPROVE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": null
+  },
+  {
+    "id": 19,
+    "campaignId": 108,
+    "entity": "CAMPAIGN",
+    "entityId": 108,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 20,
+    "campaignId": 109,
+    "entity": "CAMPAIGN",
+    "entityId": 109,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 21,
+    "campaignId": 109,
+    "entity": "CAMPAIGN",
+    "entityId": 109,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 22,
+    "campaignId": 109,
+    "entity": "CAMPAIGN",
+    "entityId": 109,
+    "action": "APPROVE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": null
+  },
+  {
+    "id": 23,
+    "campaignId": 109,
+    "entity": "CAMPAIGN",
+    "entityId": 109,
+    "action": "ACTIVATE",
+    "changes": null,
+    "at": "2026-10-23T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 24,
+    "campaignId": 109,
+    "entity": "CAMPAIGN",
+    "entityId": 109,
+    "action": "UPDATE",
+    "changes": {
+      "marketingName": {
+        "from": null,
+        "to": null
+      }
+    },
+    "at": "2026-10-24T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 25,
+    "campaignId": 110,
+    "entity": "CAMPAIGN",
+    "entityId": 110,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 26,
+    "campaignId": 110,
+    "entity": "CAMPAIGN",
+    "entityId": 110,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 27,
+    "campaignId": 111,
+    "entity": "CAMPAIGN",
+    "entityId": 111,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 28,
+    "campaignId": 112,
+    "entity": "CAMPAIGN",
+    "entityId": 112,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 29,
+    "campaignId": 113,
+    "entity": "CAMPAIGN",
+    "entityId": 113,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 30,
+    "campaignId": 114,
+    "entity": "CAMPAIGN",
+    "entityId": 114,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 31,
+    "campaignId": 114,
+    "entity": "CAMPAIGN",
+    "entityId": 114,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 32,
+    "campaignId": 114,
+    "entity": "CAMPAIGN",
+    "entityId": 114,
+    "action": "APPROVE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": null
+  },
+  {
+    "id": 33,
+    "campaignId": 114,
+    "entity": "CAMPAIGN",
+    "entityId": 114,
+    "action": "ACTIVATE",
+    "changes": null,
+    "at": "2026-10-23T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 34,
+    "campaignId": 114,
+    "entity": "CAMPAIGN",
+    "entityId": 114,
+    "action": "STOP",
+    "changes": null,
+    "at": "2026-10-24T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 35,
+    "campaignId": 115,
+    "entity": "CAMPAIGN",
+    "entityId": 115,
+    "action": "CREATE",
+    "changes": null,
+    "at": "2026-10-20T10:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 36,
+    "campaignId": 115,
+    "entity": "CAMPAIGN",
+    "entityId": 115,
+    "action": "TO_MODERATION",
+    "changes": null,
+    "at": "2026-10-21T12:00:00",
+    "actor": "ivanov.p",
+    "comment": null
+  },
+  {
+    "id": 37,
+    "campaignId": 115,
+    "entity": "CAMPAIGN",
+    "entityId": 115,
+    "action": "DECLINE",
+    "changes": null,
+    "at": "2026-10-22T12:00:00",
+    "actor": "petrova.m",
+    "comment": "Кнопка «Закрыть» на промо-экране вводит в заблуждение: уберите её или замените на ссылку на условия подписки"
+  }
+]

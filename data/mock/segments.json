@@ -1,0 +1,282 @@
+[
+  {
+    "code": "CITY_MSK",
+    "name": "Москва",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 13000000
+  },
+  {
+    "code": "CITY_SPB",
+    "name": "Санкт-Петербург",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 5600000
+  },
+  {
+    "code": "CITY_NVS",
+    "name": "Новосибирск",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 1200000
+  },
+  {
+    "code": "CITY_KZN",
+    "name": "Казань",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 900000
+  },
+  {
+    "code": "CITY_EKB",
+    "name": "Екатеринбург",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 1100000
+  },
+  {
+    "code": "CITY_SLD",
+    "name": "Сочи",
+    "type": "GEO_CITY",
+    "state": "ACTIVE",
+    "count": 400000
+  },
+  {
+    "code": "REGION_MOS_OBL",
+    "name": "Московская область",
+    "type": "GEO_REGION",
+    "state": "ACTIVE",
+    "count": 8500000
+  },
+  {
+    "code": "REGION_LEN_OBL",
+    "name": "Ленинградская область",
+    "type": "GEO_REGION",
+    "state": "ACTIVE",
+    "count": 3200000
+  },
+  {
+    "code": "REGION_KRD_KRAI",
+    "name": "Краснодарский край",
+    "type": "GEO_REGION",
+    "state": "ACTIVE",
+    "count": 4200000
+  },
+  {
+    "code": "REGION_SVD_OBL",
+    "name": "Свердловская область",
+    "type": "GEO_REGION",
+    "state": "ACTIVE",
+    "count": 3100000
+  },
+  {
+    "code": "AGE_18_25",
+    "name": "Возраст 18–25",
+    "type": "AGE",
+    "state": "ACTIVE",
+    "count": 9000000
+  },
+  {
+    "code": "AGE_26_45",
+    "name": "Возраст 26–45",
+    "type": "AGE",
+    "state": "ACTIVE",
+    "count": 24000000
+  },
+  {
+    "code": "AGE_46_60",
+    "name": "Возраст 46–60",
+    "type": "AGE",
+    "state": "ACTIVE",
+    "count": 18000000
+  },
+  {
+    "code": "AGE_60_PLUS",
+    "name": "Возраст 60+",
+    "type": "AGE",
+    "state": "ACTIVE",
+    "count": 9500000
+  },
+  {
+    "code": "MALE",
+    "name": "Мужской пол",
+    "type": "GENDER",
+    "state": "ACTIVE",
+    "count": 34000000
+  },
+  {
+    "code": "FEMALE",
+    "name": "Женский пол",
+    "type": "GENDER",
+    "state": "ACTIVE",
+    "count": 42000000
+  },
+  {
+    "code": "INTRS_FOOD",
+    "name": "Еда",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 4210000
+  },
+  {
+    "code": "INTRS_TRAVEL",
+    "name": "Путешествия",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 6800000
+  },
+  {
+    "code": "INTRS_SPORT",
+    "name": "Спорт",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 5300000
+  },
+  {
+    "code": "INTRS_CARS",
+    "name": "Автомобили",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 7400000
+  },
+  {
+    "code": "INTRS_HOME_REPAIR",
+    "name": "Дом и ремонт",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 3900000
+  },
+  {
+    "code": "INTRS_CHILDREN",
+    "name": "Дети",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 6100000
+  },
+  {
+    "code": "INTRS_CINEMA",
+    "name": "Кино",
+    "type": "INTEREST",
+    "state": "ACTIVE",
+    "count": 8700000
+  },
+  {
+    "code": "PRODUCT_CC",
+    "name": "Кредитная карта",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 5200000
+  },
+  {
+    "code": "PRODUCT_DC",
+    "name": "Дебетовая карта",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 32000000
+  },
+  {
+    "code": "PRODUCT_DEP",
+    "name": "Вклад",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 8100000
+  },
+  {
+    "code": "PRODUCT_PREMIUM",
+    "name": "Премиальная карта",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 1250000
+  },
+  {
+    "code": "PRODUCT_MORTGAGE",
+    "name": "Ипотека",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 2100000
+  },
+  {
+    "code": "PRODUCT_AUTO_LOAN",
+    "name": "Автокредит",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 890000
+  },
+  {
+    "code": "PRODUCT_INSURANCE",
+    "name": "Страхование",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 4600000
+  },
+  {
+    "code": "PRODUCT_SUBSCRIPTION",
+    "name": "Подписки",
+    "type": "PRODUCT",
+    "state": "ACTIVE",
+    "count": 9300000
+  },
+  {
+    "code": "CHANNEL_VIP",
+    "name": "Канал VIP",
+    "type": "CHANNEL",
+    "state": "ACTIVE",
+    "count": 350000
+  },
+  {
+    "code": "CHANNEL_MASS",
+    "name": "Массовый канал",
+    "type": "CHANNEL",
+    "state": "ACTIVE",
+    "count": 50000000
+  },
+  {
+    "code": "CHANNEL_MID",
+    "name": "Средний канал",
+    "type": "CHANNEL",
+    "state": "ACTIVE",
+    "count": 12500000
+  },
+  {
+    "code": "CHANNEL_NEW_USER",
+    "name": "Новые пользователи приложения",
+    "type": "CHANNEL",
+    "state": "ACTIVE",
+    "count": 2900000
+  },
+  {
+    "code": "EXC_MORATORIUM",
+    "name": "Исключение. Мораторий",
+    "type": "BASIC",
+    "state": "ACTIVE",
+    "count": 2000000
+  },
+  {
+    "code": "EXC_UNSUBSCRIBED",
+    "name": "Исключение. Отписались от рекламы",
+    "type": "BASIC",
+    "state": "ACTIVE",
+    "count": 15000000
+  },
+  {
+    "code": "EXC_OVERCOMMUNICATED",
+    "name": "Исключение. Перекоммуницированы",
+    "type": "BASIC",
+    "state": "ACTIVE",
+    "count": 7600000
+  },
+  {
+    "code": "EXC_EMPLOYEES",
+    "name": "Исключение. Сотрудники банка",
+    "type": "BASIC",
+    "state": "ACTIVE",
+    "count": 250000
+  },
+  {
+    "code": "SEG_DRAFT_WINTER",
+    "name": "Черновик. Зимняя кампания",
+    "type": "BASIC",
+    "state": "NEW",
+    "count": 0
+  }
+]

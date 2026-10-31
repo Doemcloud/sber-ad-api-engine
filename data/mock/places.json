@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "code": "mainScreenStories",
+    "description": "Промо-блок на главном экране",
+    "defaultBanner": "STORY",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 2,
+    "code": "mainScreenSmartBanner",
+    "description": "Смарт-баннер на главном",
+    "defaultBanner": "SMART_BANNER",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 3,
+    "code": "catalogPromo",
+    "description": "Промо-баннер в каталоге",
+    "defaultBanner": "SMART_BANNER",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 4,
+    "code": "oldStoriesSlot",
+    "description": "Архивный сторис-слот",
+    "defaultBanner": "STORY",
+    "state": "INACTIVE"
+  },
+  {
+    "id": 5,
+    "code": "paymentsScreenBanner",
+    "description": "Баннер на экране платежей",
+    "defaultBanner": "SMART_BANNER",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 6,
+    "code": "historyScreenBanner",
+    "description": "Баннер на экране истории операций",
+    "defaultBanner": "SMART_BANNER",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 7,
+    "code": "depositScreenPromo",
+    "description": "Промо на экране вкладов",
+    "defaultBanner": "SMART_BANNER",
+    "state": "ACTIVE"
+  },
+  {
+    "id": 8,
+    "code": "oldCatalogSlot",
+    "description": "Слот каталога до редизайна",
+    "defaultBanner": "SMART_BANNER",
+    "state": "INACTIVE"
+  }
+]
