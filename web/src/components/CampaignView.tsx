@@ -25,7 +25,6 @@ interface Props {
   onOpenInChat?: () => void;
 }
 
-const PRIORITY: Record<number, string> = { 0: "обычный", 10: "повышенный", 25: "высокий", 50: "максимальный" };
 
 export default function CampaignView({ campaign: c, dicts, validation, refreshKey, onOpenInChat }: Props) {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
@@ -62,7 +61,6 @@ export default function CampaignView({ campaign: c, dicts, validation, refreshKe
           <dt>Тематика</dt><dd>{topicLabel(c.topic, dicts)}</dd>
           <dt>Теги</dt><dd>{tags.length ? tags.join(", ") : <span className="muted">нет</span>}</dd>
           {c.keywords && <><dt>Ключевые слова</dt><dd>{c.keywords.split(";").join(", ")}</dd></>}
-          <dt>Приоритет</dt><dd>{PRIORITY[c.weight] ?? c.weight}, прогнозный CTR {c.initialCtr}%</dd>
           <dt>Аудитория</dt>
           <dd>
             {c.audienceType === "ALL_USERS" ? "Все клиенты" : (

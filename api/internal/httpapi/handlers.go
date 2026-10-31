@@ -8,15 +8,31 @@ import (
 	"net/http"
 	"strconv"
 
+	"crypto/subtle"
+	"strings"
+	"time"
+
+	"adcamp/internal/auth"
 	"adcamp/internal/domain"
 	"adcamp/internal/service"
 )
 
-type API struct{ S *service.Service }
+// API — HTTP-слой. Auth/Required/ServiceKey — вход по логину и паролю:
+//   - Authorization: Bearer <токен> → пользователь и роль берутся из токена (заголовкам браузера не верим);
+//   - X-Service-Key — сервис-агент действует от имени уже проверенного пользователя (X-User/X-Role);
+//   - Required=false — режим ТЗ: роль из X-Role без входа (тесты, curl).
+type API struct {
+	S          *service.Service
+	Auth       *auth.Auth
+	Required   bool
+	ServiceKey string
+}
 
 func (a *API) Routes() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	m.HandleFunc("POST /auth/login", a.login)
+	m.HandleFunc("GET /auth/me", a.me)
 
 	for _, name := range []string{"topics", "tags", "channels", "banner-types", "segment-types", "segments", "places"} {
 		n := name
@@ -74,6 +90,7 @@ func (a *API) Routes() http.Handler {
 	}))
 
 	m.HandleFunc("GET /campaigns/{id}/warnings", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Warnings(id(r)) }))
+	m.HandleFunc("GET /campaigns/{id}/stats", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Stats(id(r)) }))
 	m.HandleFunc("GET /campaigns/{id}/audit", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Audit(id(r)) }))
 
 	// жизненный цикл
@@ -100,7 +117,51 @@ func (a *API) Routes() http.Handler {
 		return a.S.CBROExport(int64(v)), nil
 	}, 200))
 
-	return withHeaders(m)
+	return a.withHeaders(m)
+}
+
+func authError(w http.ResponseWriter, code int, c, msg string) {
+	writeJSON(w, code, map[string]any{"errors": []map[string]string{{"code": c, "message": msg}}})
+}
+
+func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	var b struct{ Login, Password string }
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&b); err != nil {
+		authError(w, 400, "BODY_INVALID", "Ожидается JSON с полями login и password")
+		return
+	}
+	if a.Auth == nil {
+		authError(w, 503, "AUTH_DISABLED", "Вход не настроен")
+		return
+	}
+	tok, u, exp, err := a.Auth.Login(b.Login, b.Password)
+	if err != nil {
+		authError(w, 401, "AUTH_INVALID", "Неверный логин или пароль")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"token": tok, "user": u, "expiresAt": exp.UTC().Format(time.RFC3339)})
+}
+
+func (a *API) me(w http.ResponseWriter, r *http.Request) {
+	tok := bearer(r)
+	if a.Auth == nil || tok == "" {
+		authError(w, 401, "AUTH_REQUIRED", "Войдите в рекламный кабинет")
+		return
+	}
+	u, err := a.Auth.Verify(tok)
+	if err != nil {
+		authError(w, 401, "AUTH_EXPIRED", err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"user": u})
+}
+
+func bearer(r *http.Request) string {
+	h := r.Header.Get("Authorization")
+	if len(h) > 7 && strings.EqualFold(h[:7], "Bearer ") {
+		return strings.TrimSpace(h[7:])
+	}
+	return ""
 }
 
 func actor(r *http.Request) service.Actor {
@@ -160,23 +221,46 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	}
 }
 
-// withHeaders: CORS для фронта и эхо X-User/X-Role в ответе (task.md §3).
-func withHeaders(h http.Handler) http.Handler {
+// withHeaders: CORS для фронта, проверка входа и эхо X-User/X-Role в ответе (task.md §3).
+func (a *API) withHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User, X-Role")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User, X-Role, X-Service-Key")
 		w.Header().Set("Access-Control-Expose-Headers", "X-User, X-Role")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(204)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, "/auth/") {
+			if tok := bearer(r); tok != "" && a.Auth != nil {
+				u, err := a.Auth.Verify(tok)
+				if err != nil {
+					authError(w, 401, "AUTH_EXPIRED", err.Error())
+					return
+				}
+				r.Header.Set("X-User", u.User) // роль — только из токена
+				r.Header.Set("X-Role", u.Role)
+			} else if a.Required && !a.trustedService(r) {
+				r.Header.Del("X-User")
+				r.Header.Del("X-Role")
+				if r.Method != http.MethodGet {
+					authError(w, 401, "AUTH_REQUIRED", "Войдите в рекламный кабинет")
+					return
+				}
+			}
+		}
 		if u := r.Header.Get("X-User"); u != "" {
 			w.Header().Set("X-User", u)
 		}
 		if role := r.Header.Get("X-Role"); role != "" {
 			w.Header().Set("X-Role", role)
 		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(204)
-			return
-		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (a *API) trustedService(r *http.Request) bool {
+	k := r.Header.Get("X-Service-Key")
+	return a.ServiceKey != "" && k != "" && subtle.ConstantTimeCompare([]byte(k), []byte(a.ServiceKey)) == 1
 }

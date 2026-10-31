@@ -1,0 +1,21 @@
+{
+  "_note": "Демо-учётки для входа в интерфейс: client/client — менеджер кампаний, moder/moder — модератор. Пароли хранятся как SHA-256.",
+  "users": [
+    {
+      "login": "client",
+      "passwordSha256": "948fe603f61dc036b5c596dc09fe3ce3f3d30dc90f024c85f3c82db2ccab679d",
+      "user": "ivanov.p",
+      "role": "campaignManager",
+      "name": "Павел Иванов",
+      "title": "Менеджер кампаний"
+    },
+    {
+      "login": "moder",
+      "passwordSha256": "b465361ffa25886d97c693b209bd347e600d1b14d397a8e42b7b7c408f32f0a9",
+      "user": "petrova.m",
+      "role": "campaignModerator",
+      "name": "Мария Петрова",
+      "title": "Модератор"
+    }
+  ]
+}

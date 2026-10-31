@@ -1,12 +1,12 @@
-import type { Role } from "../types";
-import { IconBot, IconDatabase, IconGrid, IconSearch, IconSettings, IconShield } from "./Icons";
+import { IconBot, IconChart, IconDatabase, IconGrid, IconLogout, IconSearch, IconSettings, IconShield } from "./Icons";
 
-export type Page = "assistant" | "campaigns" | "review" | "dicts";
+export type Page = "assistant" | "campaigns" | "review" | "stats" | "dicts";
 
 const NAV: { page: Page; title: string; Icon: (p: { size?: number }) => JSX.Element }[] = [
   { page: "assistant", title: "Ассистент", Icon: IconBot },
   { page: "campaigns", title: "Кампании", Icon: IconGrid },
   { page: "review", title: "Готовность к модерации", Icon: IconShield },
+  { page: "stats", title: "Статистика", Icon: IconChart },
   { page: "dicts", title: "Аудитории и размещение", Icon: IconDatabase },
 ];
 
@@ -37,22 +37,21 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
   );
 }
 
-export const USERS: Record<Role, { user: string; initials: string; label: string }> = {
-  campaignManager: { user: "ivanov.p", initials: "ПИ", label: "Павел Иванов · менеджер" },
-  campaignModerator: { user: "petrova.m", initials: "МП", label: "Мария Петрова · модератор" },
-};
 
-const CRUMB: Record<Page, string> = { assistant: "Ассистент", campaigns: "Кампании", review: "Готовность к модерации", dicts: "Аудитории и размещение" };
+const CRUMB: Record<Page, string> = { assistant: "Ассистент", campaigns: "Кампании", review: "Готовность к модерации", stats: "Статистика", dicts: "Аудитории и размещение" };
 
 interface TopbarProps {
   page: Page;
-  role: Role;
+  name: string;
+  title: string;
   query: string;
   onQuery: (q: string) => void;
-  onRole: (r: Role) => void;
+  onLogout: () => void;
 }
 
-export function Topbar({ page, role, query, onQuery, onRole }: TopbarProps) {
+const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+
+export function Topbar({ page, name, title, query, onQuery, onLogout }: TopbarProps) {
   return (
     <div className="topbar">
       <div className="crumbs"><span className="muted">Рекламный кабинет СберБанк Онлайн</span><span className="sep">/</span><b>{CRUMB[page]}</b></div>
@@ -60,12 +59,11 @@ export function Topbar({ page, role, query, onQuery, onRole }: TopbarProps) {
         <IconSearch size={16} />
         <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск кампаний, сегментов, мест размещения" />
       </label>
-      <label className="role" title="Роль определяет доступные действия">
-        <select value={role} onChange={(e) => onRole(e.target.value as Role)}>
-          {(Object.keys(USERS) as Role[]).map((r) => <option key={r} value={r}>{USERS[r].label}</option>)}
-        </select>
-        <span className="avatar">{USERS[role].initials}</span>
-      </label>
+      <div className="me">
+        <div className="me-text"><b>{name}</b><span>{title}</span></div>
+        <span className="avatar">{initials(name)}</span>
+        <button className="logout" onClick={onLogout} title="Выйти" aria-label="Выйти"><IconLogout size={18} /></button>
+      </div>
     </div>
   );
 }

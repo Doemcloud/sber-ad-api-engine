@@ -18,6 +18,8 @@ class ApiClient:
     def __init__(self, base: str | None = None, timeout: float = 20):
         self.base = (base or os.getenv("API_URL", "http://localhost:8080")).rstrip("/")
         self.timeout = timeout
+        # Агент — доверенный сервис: действует от имени пользователя, которого уже проверил по токену.
+        self.service_key = os.getenv("SERVICE_KEY", "")
 
     def request(self, method: str, path: str, body: dict | None = None, user: str = "", role: str = ""):
         data = json.dumps(body, ensure_ascii=False).encode() if body is not None else None
@@ -27,6 +29,8 @@ class ApiClient:
             req.add_header("X-User", user)
         if role:
             req.add_header("X-Role", role)
+        if self.service_key:
+            req.add_header("X-Service-Key", self.service_key)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 raw = r.read()
@@ -38,6 +42,17 @@ class ApiClient:
             except Exception:
                 errors = [{"code": "HTTP_ERROR", "message": raw.decode(errors="replace")[:300]}]
             raise ApiError(e.code, errors) from None
+        except urllib.error.URLError as e:
+            raise ApiError(503, [{"code": "API_UNAVAILABLE", "message": f"API кампаний недоступен: {e.reason}"}]) from None
+
+    def me(self, token: str) -> dict:
+        """Кто вошёл: проверка токена пользователя в API кампаний."""
+        req = urllib.request.Request(self.base + "/auth/me", headers={"Authorization": f"Bearer {token}"})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                return json.loads(r.read())["user"]
+        except urllib.error.HTTPError as e:
+            raise ApiError(e.code, [{"code": "AUTH_EXPIRED", "message": "Сессия истекла — войдите заново"}]) from None
         except urllib.error.URLError as e:
             raise ApiError(503, [{"code": "API_UNAVAILABLE", "message": f"API кампаний недоступен: {e.reason}"}]) from None
 

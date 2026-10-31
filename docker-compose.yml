@@ -9,6 +9,9 @@ services:
       PORT: 8080
       MOCK_DIR: /data/mock
       STATE_FILE: /state/state.json
+      AUTH_REQUIRED: "1"                                     # писать в API — только после входа
+      AUTH_SECRET: ${AUTH_SECRET:-sber-ad-dev-secret-change-me}
+      SERVICE_KEY: ${SERVICE_KEY:-sber-ad-service-key}      # агент действует от имени вошедшего
 
   agent:
     build: ./agent
@@ -19,6 +22,8 @@ services:
     environment:
       API_URL: http://api:8080
       SESSIONS_FILE: /state/sessions.json   # история диалогов ассистента
+      AUTH_REQUIRED: "1"
+      SERVICE_KEY: ${SERVICE_KEY:-sber-ad-service-key}
     volumes:
       - agent-state:/state
       - ./certs:/certs:ro   # сертификат Минцифры для GigaChat (GIGACHAT_CA_BUNDLE)

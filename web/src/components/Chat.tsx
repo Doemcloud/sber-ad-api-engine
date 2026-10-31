@@ -20,6 +20,7 @@ interface Props {
   onToggleHistory: () => void;
   onOpenSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  awaitingFix?: boolean; // план отменён — ассистент ждёт, что исправить
 }
 
 const EXAMPLES = [
@@ -41,9 +42,11 @@ function whenLabel(iso: string) {
 }
 
 export default function Chat(props: Props) {
-  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession } = props;
+  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix } = props;
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (awaitingFix && !busy) input.current?.focus(); }, [awaitingFix, busy]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [items, plan, busy]);
 
   function submit(t: string) {
@@ -121,7 +124,9 @@ export default function Chat(props: Props) {
       )}
 
       <form onSubmit={(e) => { e.preventDefault(); submit(text); }}>
-        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Опишите задачу: продукт, аудитория, место размещения, сроки…"
+        <textarea ref={input} rows={3} value={text} onChange={(e) => setText(e.target.value)}
+          className={awaitingFix ? "await" : ""}
+          placeholder={awaitingFix ? "Что поправить в плане? Например: «даты с 10 ноября», «без Санкт-Петербурга», «короче заголовок»" : "Опишите задачу: продукт, аудитория, место размещения, сроки…"}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(text); } }} />
         <button type="submit" className="send" disabled={busy || !text.trim()} aria-label="Отправить"><IconSend size={18} /></button>
       </form>

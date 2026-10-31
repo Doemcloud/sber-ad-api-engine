@@ -3,7 +3,6 @@ import { AUDIENCE_RU, fmtReach, humanize, topicLabel } from "../ru";
 import type { BannerContent, Dicts, PendingAction, PlanStep, PromoContent } from "../types";
 import { BannerPreview, Phone, PromoPreview } from "./Previews";
 
-const PRIORITY: Record<number, string> = { 0: "обычный", 10: "повышенный", 25: "высокий", 50: "максимальный" };
 
 function StepPreview({ step, dicts }: { step: PlanStep; dicts: Dicts | null }) {
   const p = step.preview;
@@ -18,7 +17,6 @@ function StepPreview({ step, dicts }: { step: PlanStep; dicts: Dicts | null }) {
     const c = p.data as Record<string, unknown>;
     const places = ((c.places as unknown[]) ?? []).map((id) => dicts?.places.find((x) => x.id === id)?.description ?? "новое место");
     const tags = ((c.tags as unknown[]) ?? []).map((id) => dicts?.tags.find((x) => x.id === id)?.name ?? "новый тег");
-    const weight = Number(c.weight ?? 0);
     return (
       <dl className="fields small">
         <dt>Период</dt><dd>{fmtDate(String(c.startDate))} {String(c.startTime)} — {c.endDate ? `${fmtDate(String(c.endDate))} ${c.endTime ?? ""}` : "без даты окончания"}</dd>
@@ -26,7 +24,6 @@ function StepPreview({ step, dicts }: { step: PlanStep; dicts: Dicts | null }) {
         <dt>Аудитория</dt><dd>{AUDIENCE_RU[String(c.audienceType)] ?? String(c.audienceType)}</dd>
         <dt>Размещение</dt><dd>{places.join(", ") || "—"}</dd>
         <dt>Теги</dt><dd>{tags.join(", ") || "—"}</dd>
-        <dt>Приоритет</dt><dd>{PRIORITY[weight] ?? weight}, прогнозный CTR {String(c.initialCtr ?? 15)}%</dd>
       </dl>
     );
   }

@@ -73,6 +73,7 @@ class Session:
     created_at: str = field(default_factory=lambda: now())
     updated_at: str = field(default_factory=lambda: stamp())
     transcript: list = field(default_factory=list)  # лента для UI: реплики, итоги выполнения — для истории
+    awaiting_fix: dict | None = None  # менеджер отменил план — ждём, что исправить
 
 
 SESSIONS: dict[str, Session] = {}
@@ -153,7 +154,14 @@ class Agent:
 
     def chat(self, sid: str | None, text: str, user: str | None = None, role: str | None = None) -> dict:
         s = self.session(sid, user, role)
-        s.messages.append({"role": "user", "content": text})
+        if s.awaiting_fix:  # это ответ на «что не так с планом?»
+            fix, s.awaiting_fix = s.awaiting_fix, None
+            s.messages.append({"role": "user", "content": (
+                f"[система] Причина отмены плана «{fix['title']}» (шаги: {'; '.join(fix['steps'])}). "
+                f"Исправь по замечанию, остальное оставь, при необходимости уточни и собери исправленный план целиком.\n\n"
+                f"Замечание менеджера: {text}")})
+        else:
+            s.messages.append({"role": "user", "content": text})
         self.log(s, "user_message", text)
         if not s.title:
             s.title = text.strip().replace("\n", " ")[:80]
@@ -399,10 +407,20 @@ class Agent:
             raise KeyError("план не найден или уже обработан")
         plan, s.pending = s.pending, None
         if not approved:
-            self.log(s, "plan_rejected", plan["title"])
-            s.messages.append({"role": "user", "content": f"[система] Менеджер отклонил план «{plan['title']}». {note}".strip()})
+            self.log(s, "plan_rejected", {"title": plan["title"], "note": note})
             self.note(s, {"kind": "result", "results": [], "rejected": plan["title"]})
-            return self._finish(s)
+            if note.strip():  # причину написали сразу — пересобираем план
+                s.messages.append({"role": "user", "content": f"[система] Менеджер отменил план «{plan['title']}». Что исправить: {note}. Собери исправленный план."})
+                return self._finish(s)
+            # Причины нет — спрашиваем без обращения к модели и ждём ответа менеджера.
+            s.awaiting_fix = {"title": plan["title"], "steps": [st["summary"] for st in plan["steps"]]}
+            reply = ("План отменён, ничего не сохранено. Что не так? Напишите, что поправить — например, другие даты, "
+                     "аудиторию, место размещения или текст баннера, — и я соберу исправленный план.")
+            s.messages.append({"role": "user", "content": f"[система] Менеджер отменил план «{plan['title']}» и пока не сказал почему."})
+            s.messages.append({"role": "assistant", "content": reply})
+            self.note(s, {"kind": "assistant", "text": reply})
+            save_sessions()
+            return self.state(s, reply)
         self.log(s, "plan_approved", plan["title"])
         results, failed = [], None
         for st in plan["steps"]:
@@ -525,7 +543,7 @@ class Agent:
     def state(self, s: Session, reply: str) -> dict:
         out = {"session_id": s.id, "user": s.user, "role": s.role, "reply": reply, "title": s.title,
                "transcript": s.transcript,
-               "campaign_id": s.campaign_id, "pending_action": s.pending, "last_result": s.last_result,
+               "campaign_id": s.campaign_id, "pending_action": s.pending, "awaiting_fix": bool(s.awaiting_fix), "last_result": s.last_result,
                "journal": s.journal[-30:]}
         if s.campaign_id:
             try:

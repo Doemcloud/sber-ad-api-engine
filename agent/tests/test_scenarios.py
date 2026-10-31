@@ -250,13 +250,25 @@ class Scenarios(unittest.TestCase):
             say("Нужен комментарий — что исправить менеджеру?"),
             calls(call("decline", campaign_id=110, comment="Нет креатива для depositScreenPromo")),
             say("Готов вернуть на доработку — подтвердите."),
-            say("Хорошо, ничего не делаю."),
+            calls(call("decline", campaign_id=110, comment="Нет креатива для промо-экрана вклада; добавьте теги")),
+            say("Исправил комментарий — подтвердите."),
         ])
         st = a.chat(None, "Отклони 110", user="petrova.m", role="campaignModerator")
         self.assertEqual(tool_results(llm)[-1]["errors"][0]["code"], "DECLINE_COMMENT_REQUIRED")
         st = a.chat(st["session_id"], "Нет креатива для depositScreenPromo")
         st = a.confirm(st["session_id"], st["pending_action"]["id"], False)
         self.assertEqual(ApiClient().get("/campaigns/110")["state"], "ON_MODERATION")  # ничего не записано
+        # «Отменить» без причины: ассистент спрашивает, что не так, и ждёт — модель не вызывается
+        self.assertIn("Что не так", st["reply"])
+        self.assertTrue(st["awaiting_fix"])
+        self.assertIsNone(st["pending_action"])
+        # ответ менеджера — причина отмены: модель получает её вместе с отменённым планом и пересобирает план
+        st = a.chat(st["session_id"], "Комментарий слишком короткий, добавь про теги")
+        sent = [m for m in llm.seen[-2] if m["role"] == "user"][-1]["content"]
+        self.assertIn("Причина отмены плана", sent)
+        self.assertIn("добавь про теги", sent)
+        self.assertFalse(st["awaiting_fix"])
+        self.assertIn("теги", st["pending_action"]["steps"][0]["args"]["comment"])
 
 
 if __name__ == "__main__":

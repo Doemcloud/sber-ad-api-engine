@@ -1,5 +1,5 @@
 import type {
-  AgentState, AuditEntry, HistoryItem, BannerType, CampaignDetails, CampaignListItem,
+  AgentState, AuditEntry, CampaignStats, HistoryItem, BannerType, CampaignDetails, CampaignListItem,
   Dicts, Place, Role, Segment, Tag, Topic, Validation,
 } from "./types";
 
@@ -7,8 +7,36 @@ const env = (import.meta as unknown as { env: Record<string, string | undefined>
 export const AGENT_URL = env.VITE_AGENT_URL ?? "http://localhost:8000";
 export const API_URL = env.VITE_API_URL ?? "http://localhost:8080";
 
+// ---------- вход ----------
+export interface AuthUser { login: string; user: string; role: Role; name: string; title: string }
+export interface Auth { token: string; user: AuthUser; expiresAt: string }
+const AUTH_KEY = "sber-ad.auth";
+
+export function loadAuth(): Auth | null {
+  try {
+    const a = JSON.parse(localStorage.getItem(AUTH_KEY) ?? "null") as Auth | null;
+    return a && new Date(a.expiresAt).getTime() > Date.now() ? a : null;
+  } catch { return null; }
+}
+let auth: Auth | null = loadAuth();
+let onExpired: () => void = () => undefined;
+export const setOnAuthExpired = (fn: () => void) => { onExpired = fn; };
+export function saveAuth(a: Auth | null) {
+  auth = a;
+  try { a ? localStorage.setItem(AUTH_KEY, JSON.stringify(a)) : localStorage.removeItem(AUTH_KEY); } catch { /* без хранилища — до перезагрузки */ }
+}
+
+export async function login(loginName: string, password: string): Promise<Auth> {
+  const a = await req<Auth>(`${API_URL}/auth/login`, post({ login: loginName, password }));
+  saveAuth(a);
+  return a;
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...((init?.headers as Record<string, string>) ?? {}) };
+  if (auth && !url.endsWith("/auth/login")) headers.Authorization = `Bearer ${auth.token}`;
+  const r = await fetch(url, { ...init, headers });
+  if (r.status === 401 && auth && !url.endsWith("/auth/login")) { saveAuth(null); onExpired(); }
   const text = await r.text();
   const body = text ? JSON.parse(text) : null;
   if (!r.ok) {
@@ -40,6 +68,7 @@ export const api = {
   campaign: (id: number) => req<CampaignDetails>(`${API_URL}/campaigns/${id}`),
   warnings: (id: number) => req<Validation>(`${API_URL}/campaigns/${id}/warnings`),
   audit: (id: number) => req<AuditEntry[]>(`${API_URL}/campaigns/${id}/audit`),
+  stats: (id: number) => req<CampaignStats>(`${API_URL}/campaigns/${id}/stats`),
   dicts: async (): Promise<Dicts> => {
     const [topics, tags, bannerTypes, segments, places] = await Promise.all([
       req<Topic[]>(`${API_URL}/topics`), req<Tag[]>(`${API_URL}/tags`), req<BannerType[]>(`${API_URL}/banner-types`),

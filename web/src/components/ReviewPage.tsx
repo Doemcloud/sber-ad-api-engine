@@ -18,8 +18,14 @@ const ICON: Record<Status, JSX.Element> = {
   ok: <IconCheck size={14} />, error: <IconAlertCircle size={15} />, warn: <IconAlertTriangle size={14} />, info: <IconInfo size={15} />,
 };
 
-const PRIORITIES: { value: number; label: string }[] = [
-  { value: 0, label: "Обычный" }, { value: 10, label: "Повышенный" }, { value: 25, label: "Высокий" }, { value: 50, label: "Максимум" },
+// Готовые причины возврата на доработку — модератор отмечает их и дописывает своё.
+const DECLINE_REASONS = [
+  "Креативы настроены не для всех мест размещения",
+  "Добавьте теги кампании",
+  "Текст баннера нужно поправить",
+  "Проверьте даты показа",
+  "Аудитория не соответствует продукту",
+  "Нужна ссылка для перехода",
 ];
 const EDITABLE = ["DRAFT", "NEEDS_WORK", "APPROVED", "ACTIVE", "ACTIVE_EDITING"];
 
@@ -70,7 +76,6 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
   const included = c.segments.included.map((code) => dicts?.segments.find((s) => s.code === code));
   const reach = included.reduce((s, x) => s + (x?.count ?? 0), 0);
   const format = (id: number) => dicts?.bannerTypes.find((b) => b.id === id)?.code;
-  const priority = PRIORITIES.find((p) => p.value === c.weight)?.label ?? `${c.weight}`;
 
   return (
     <div className="page review">
@@ -166,17 +171,7 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
             )}
           </section>
 
-          <section className="panel pad">
-            <h3>Приоритет показа</h3>
-            <div className="segmented">
-              {PRIORITIES.map((p) => (
-                <button key={p.value} className={c.weight === p.value ? "on" : ""} disabled={!editable || busy}
-                  onClick={() => dicts && c.weight !== p.value && act(() => actions.updateHeader(c, { weight: p.value }, dicts, who))}>{p.label}</button>
-              ))}
-            </div>
-            <p className="muted small">Приоритет «{priority.toLowerCase()}» и прогнозный CTR {c.initialCtr}% влияют на то, как часто кампания выигрывает показ у других кампаний на том же месте. Окончательно показ выбирает рекламная система.</p>
-            <div className="hint-box"><IconClock size={16} /><span>Период показа: {fmtPeriod(c)} (UTC). Ограничений частоты показов нет — не увидят рекламу только исключённые сегменты.</span></div>
-          </section>
+          <div className="hint-box standalone"><IconClock size={16} /><span>Период показа: {fmtPeriod(c)} (UTC). Ограничений частоты показов нет — не увидят рекламу только исключённые сегменты.</span></div>
 
           <SubmitCard c={c} who={who} blockers={blockers.length} warnings={warnings.map((w) => w.title)} ack={ack} setAck={setAck}
             canSubmit={canSubmit} busy={busy} comment={comment} setComment={setComment}
@@ -196,6 +191,11 @@ interface SubmitProps {
 // Тёмная карточка действия: что можно сделать с кампанией прямо сейчас и почему.
 function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, comment, setComment, onAction }: SubmitProps) {
   const manager = who.role === "campaignManager";
+  const [declining, setDeclining] = useState(false);
+  const toggleReason = (r: string) => {
+    const parts = comment.split(/;\s*/).map((x) => x.trim()).filter(Boolean);
+    setComment((parts.includes(r) ? parts.filter((x) => x !== r) : [...parts, r]).join("; "));
+  };
   let head: { tone: string; title: string; text: string };
   let body: JSX.Element | null = null;
   let foot = "";
@@ -216,16 +216,30 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
     foot = !manager ? "Отправляет менеджер кампании — смените роль." : blockers ? `Исправьте ${blockers} ${plural(blockers, "ошибку", "ошибки", "ошибок")} — кнопка станет доступна автоматически.` : warnings.length && !ack ? "Отметьте, что видели замечания." : "Действие сохранится в истории изменений от вашего имени.";
   } else if (c.state === "ON_MODERATION") {
     head = { tone: "info", title: "На модерации", text: "Кампания ждёт решения модератора. Вносить правки сейчас нельзя." };
-    body = who.role === "campaignModerator" ? (
-      <>
-        <textarea className="dark-input" rows={2} placeholder="Комментарий для менеджера — обязателен при возврате на доработку" value={comment} onChange={(e) => setComment(e.target.value)} />
-        <div className="row">
-          <button className="cta" disabled={busy} onClick={() => onAction("approve")}>Одобрить</button>
-          <button className="cta ghost" disabled={busy || !comment.trim()} onClick={() => onAction("decline")}>На доработку</button>
+    body = who.role !== "campaignModerator" ? null : !declining ? (
+      <div className="row">
+        <button className="cta" disabled={busy} onClick={() => onAction("approve")}><IconCheck size={17} /> Одобрить</button>
+        <button className="cta ghost" disabled={busy} onClick={() => setDeclining(true)}>На доработку</button>
+      </div>
+    ) : (
+      <div className="decline-form">
+        <div className="decline-label">Что исправить менеджеру? Отметьте причины или напишите своими словами.</div>
+        <div className="reasons">
+          {DECLINE_REASONS.map((r) => (
+            <button key={r} className={`reason ${comment.includes(r) ? "on" : ""}`} onClick={() => toggleReason(r)} disabled={busy}>{r}</button>
+          ))}
         </div>
-      </>
-    ) : null;
-    foot = who.role === "campaignModerator" ? `Правило двух рук: одобрять собственные правки нельзя (последние правки — ${person(c.lastEditAuthor)}).` : "Решение принимает модератор.";
+        <textarea className="dark-input" rows={3} autoFocus placeholder="Комментарий увидит менеджер и ассистент — он поможет всё исправить"
+          value={comment} onChange={(e) => setComment(e.target.value)} />
+        <div className="row">
+          <button className="cta warn" disabled={busy || !comment.trim()} onClick={() => onAction("decline")}>Вернуть на доработку</button>
+          <button className="cta ghost" disabled={busy} onClick={() => setDeclining(false)}>Отмена</button>
+        </div>
+      </div>
+    );
+    foot = who.role !== "campaignModerator" ? "Решение принимает модератор."
+      : declining ? (comment.trim() ? "Кампания вернётся менеджеру со статусом «На доработке», комментарий сохранится в истории." : "Без комментария вернуть нельзя — менеджер должен понимать, что исправить.")
+      : `Правило двух рук: одобрять собственные правки нельзя (последние правки — ${person(c.lastEditAuthor)}).`;
   } else if (c.state === "APPROVED") {
     head = { tone: "ok", title: "Одобрена модератором", text: "После запуска кампания попадёт в приложение и её увидят клиенты." };
     body = <button className="cta" disabled={!manager || busy} onClick={() => onAction("activate")}><IconRocket size={17} /> Запустить кампанию</button>;

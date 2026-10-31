@@ -137,6 +137,7 @@ export interface AgentState {
   pending_action: PendingAction | null;
   last_result: StepResult[];
   journal: JournalEntry[];
+  awaiting_fix?: boolean;
   title?: string;
   transcript?: TranscriptItem[];
 }
@@ -167,4 +168,18 @@ export interface ChatItem {
   text?: string;
   results?: StepResult[];
   rejected?: string;
+}
+
+// Статистика кампании (GET /campaigns/{id}/stats): факт для запущенных, прогноз для остальных.
+export interface StatShare { key: string; label: string; share: number; count: number }
+export interface StatDay { date: string; impressions: number; clicks: number; reach: number }
+export interface CampaignStats {
+  campaignId: number;
+  mode: "fact" | "forecast";
+  from: string; to: string; days: number;
+  audienceSize: number; reach: number; impressions: number; clicks: number;
+  ctr: number; frequency: number; conversions: number;
+  daily: StatDay[];
+  age: StatShare[]; gender: StatShare[]; cities: StatShare[]; platforms: StatShare[]; places: StatShare[];
+  note: string;
 }

@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"adcamp/internal/auth"
 	"adcamp/internal/domain"
 	"adcamp/internal/httpapi"
 	"adcamp/internal/service"
@@ -30,5 +32,15 @@ func main() {
 	}
 	addr := ":" + env("PORT", "8080")
 	log.Printf("campaigns API on %s (mocks: %s)", addr, mockDir)
-	log.Fatal(http.ListenAndServe(addr, (&httpapi.API{S: service.New(st)}).Routes()))
+	ttl, err := time.ParseDuration(env("AUTH_TTL", "12h"))
+	if err != nil {
+		log.Fatalf("AUTH_TTL: %v", err)
+	}
+	au, err := auth.Load(filepath.Join(mockDir, "users.json"), env("AUTH_SECRET", "sber-ad-dev-secret-change-me"), ttl)
+	if err != nil {
+		log.Fatalf("учётки: %v", err)
+	}
+	api := &httpapi.API{S: service.New(st), Auth: au, Required: env("AUTH_REQUIRED", "0") == "1", ServiceKey: os.Getenv("SERVICE_KEY")}
+	log.Printf("вход по логину: обязателен=%v", api.Required)
+	log.Fatal(http.ListenAndServe(addr, api.Routes()))
 }
