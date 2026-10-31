@@ -18,6 +18,7 @@ const newSid = () => Math.random().toString(36).slice(2, 14);
 let SID_KEY = "sber-ad.assistant.sid";
 const storedSid = () => { try { return localStorage.getItem(SID_KEY); } catch { return null; } };
 const rememberSid = (v: string) => { try { localStorage.setItem(SID_KEY, v); } catch { /* приватный режим — просто не запоминаем */ } };
+const forgetSid = () => { try { localStorage.removeItem(SID_KEY); } catch { /* нечего забывать */ } };
 const GREETING: ChatItem = { kind: "assistant", text: "Расскажите о кампании своими словами: что продвигаем, для кого, где показать и в какие даты. Я подберу аудиторию и места размещения, подготовлю креативы, проверю всё и покажу, как реклама будет выглядеть, — сохраню только после вашего подтверждения." };
 
 const toItems = (t: TranscriptItem[] | undefined): ChatItem[] =>
@@ -49,7 +50,6 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   const who = { user: auth.user.user, role };
 
   useEffect(() => { api.dicts().then(setDicts).catch((e: Error) => setError(`Не удалось загрузить данные рекламного кабинета: ${e.message}`)); }, []);
-  useEffect(() => { rememberSid(sid); }, [sid]);
 
   // После перезагрузки страницы — вернуть последний диалог со всей лентой.
   useEffect(() => {
@@ -59,7 +59,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
       setState(s);
       setItems(toItems(s.transcript));
       if (s.campaign_id) setReviewId(s.campaign_id);
-    }).catch(() => undefined); // диалога уже нет (удалён) — начинаем с чистого листа
+    }).catch(() => forgetSid()); // диалога на сервере нет (удалён или история очищена) — начинаем с чистого листа
   }, []);
 
   const loadHistory = () => agent.sessions().then(setHistory).catch(() => setHistory([]));
@@ -71,6 +71,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
     try {
       const s = await fn();
       setState(s);
+      rememberSid(s.session_id); // запоминаем диалог, только когда он уже есть у агента
       if (s.campaign_id) setReviewId(s.campaign_id);
       if (s.transcript) setItems(toItems(s.transcript)); // лента с сервера — та же, что попадёт в историю
       else setItems((m) => {
@@ -92,6 +93,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   const decide = (approved: boolean) => state?.pending_action && run(() => agent.confirm(sid, state.pending_action!.id, approved));
 
   function reset() {
+    forgetSid();
     setSid(newSid());
     setState(null);
     setItems([GREETING]);
@@ -108,6 +110,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
     try {
       const s = await agent.session(id);
       setSid(id);
+      rememberSid(id);
       setState(s);
       setItems(toItems(s.transcript));
       setReviewId(s.campaign_id ?? null);
@@ -120,7 +123,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   async function deleteSession(id: string) {
     try {
       await agent.deleteSession(id);
-      if (id === sid) { setSid(newSid()); setState(null); setItems([GREETING]); }
+      if (id === sid) { forgetSid(); setSid(newSid()); setState(null); setItems([GREETING]); }
       loadHistory();
     } catch (e) {
       setError(`Не удалось удалить диалог: ${(e as Error).message}`);
