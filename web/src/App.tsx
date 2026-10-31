@@ -7,7 +7,7 @@ import CampaignView, { StateBadge } from "./components/CampaignView";
 import CampaignList from "./components/CampaignList";
 import DictsPage from "./components/DictsPage";
 import ReviewPage from "./components/ReviewPage";
-import { IconShield } from "./components/Icons";
+import { IconBulb, IconShield } from "./components/Icons";
 import { Sidebar, Topbar, type Page } from "./components/Shell";
 import LoginPage from "./components/LoginPage";
 import StatsPage from "./components/StatsPage";
@@ -165,7 +165,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
           <div className="page assistant">
             <Chat items={items} busy={busy} plan={state?.pending_action ?? null} dicts={dicts} onSend={send} onDecide={decide} onReset={reset}
               sid={sid} history={history} historyOpen={historyOpen} onToggleHistory={toggleHistory} onOpenSession={openSession} onDeleteSession={deleteSession}
-              awaitingFix={!!state?.awaiting_fix} showExamples={loadPrefs().examples} />
+              awaitingFix={!!state?.awaiting_fix} showExamples={loadPrefs().examples} suggestions={state?.suggestions} />
             <div className="col side-col">
               {state?.campaign ? (
                 <>
@@ -181,6 +181,17 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
                     )}
                     <button className="cta-light" onClick={() => openReview(state.campaign!.id)}><IconShield size={16} /> Проверить готовность к модерации</button>
                   </section>
+                  {!!state.recommendations?.length && (
+                    <section className="panel pad recs">
+                      <div className="panel-row"><h3><IconBulb size={16} /> Рекомендации ассистента</h3><span className="muted small">{state.recommendations.length}</span></div>
+                      {state.recommendations.map((r) => (
+                        <div key={r.id} className="rec">
+                          <div className="rec-text"><b>{r.title}</b><span>{r.why}</span></div>
+                          <button className="pill" disabled={busy} onClick={() => send(r.prompt)}>Сделать</button>
+                        </div>
+                      ))}
+                    </section>
+                  )}
                   <CampaignView campaign={state.campaign} dicts={dicts} validation={state.validation} refreshKey={state.journal?.length} />
                 </>
               ) : (

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatItem, Dicts, HistoryItem, PendingAction } from "../types";
+import { fmtReach } from "../ru";
 import { IconBot, IconHistory, IconPlus, IconSend, IconTrash } from "./Icons";
 import PlanCard from "./PlanCard";
 import { humanize, person } from "../ru";
@@ -22,6 +23,27 @@ interface Props {
   onDeleteSession: (id: string) => void;
   awaitingFix?: boolean; // план отменён — ассистент ждёт, что исправить
   showExamples?: boolean;
+  suggestions?: string[]; // быстрые ответы под последней репликой ассистента
+}
+
+interface Hint { label: string; kind: string; extra?: string }
+
+// Подсказки при наборе: сегменты, места размещения, теги и тематики, совпадающие с последним словом.
+function findHints(text: string, dicts: Dicts | null): { word: string; hints: Hint[] } {
+  const m = /([\p{L}\d-]{3,})$/u.exec(text);
+  const word = m?.[1] ?? "";
+  if (!dicts || !word) return { word: "", hints: [] };
+  const w = word.toLowerCase();
+  const hit = (s: string) => s.toLowerCase().split(/[\s,.()«»–-]+/).some((t) => t.startsWith(w));
+  const out: Hint[] = [];
+  for (const s of dicts.segments) {
+    const name = s.name.replace("Исключение. ", "");
+    if (s.state === "ACTIVE" && hit(name)) out.push({ label: name, kind: s.code.startsWith("EXC_") ? "исключить" : "сегмент", extra: fmtReach(s.count) });
+  }
+  for (const p of dicts.places) if (p.state === "ACTIVE" && hit(p.description)) out.push({ label: p.description, kind: "место" });
+  for (const t of dicts.tags) if (hit(t.name)) out.push({ label: t.name, kind: "тег" });
+  for (const t of dicts.topics) if (hit(t.label)) out.push({ label: t.label, kind: "тематика" });
+  return { word, hints: out.slice(0, 5) };
 }
 
 const EXAMPLES = [
@@ -43,12 +65,20 @@ function whenLabel(iso: string) {
 }
 
 export default function Chat(props: Props) {
-  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix, showExamples = true } = props;
+  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix, showExamples = true, suggestions = [] } = props;
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (awaitingFix && !busy) input.current?.focus(); }, [awaitingFix, busy]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [items, plan, busy]);
+
+  const { word, hints } = useMemo(() => findHints(text, dicts), [text, dicts]);
+  const [hintsOff, setHintsOff] = useState("");
+  const showHints = hints.length > 0 && hintsOff !== word && !busy;
+  function accept(h: Hint) {
+    setText(text.slice(0, text.length - word.length) + `«${h.label}» `);
+    input.current?.focus();
+  }
 
   function submit(t: string) {
     const v = t.trim();
@@ -115,6 +145,11 @@ export default function Chat(props: Props) {
           })}
           {plan && <PlanCard plan={plan} dicts={dicts} busy={busy} onDecide={onDecide} />}
           {busy && <div className="msg assistant typing">Ассистент думает…</div>}
+          {!busy && !plan && suggestions.length > 0 && items.length > 1 && (
+            <div className="quick" role="group" aria-label="Быстрые ответы">
+              {suggestions.map((q) => <button key={q} className="quick-btn" onClick={() => submit(q)}>{q}</button>)}
+            </div>
+          )}
           {items.length <= 1 && showExamples && (
             <div className="examples">
               {EXAMPLES.map((e) => <button key={e} className="example" onClick={() => submit(e)}>{e}</button>)}
@@ -124,11 +159,25 @@ export default function Chat(props: Props) {
         </div>
       )}
 
+      {showHints && (
+        <div className="typeahead" role="listbox" aria-label="Подсказки из справочников">
+          <span className="muted small">Подставить:</span>
+          {hints.map((h, i) => (
+            <button key={h.kind + h.label} role="option" aria-selected={i === 0} className="hint-chip" onClick={() => accept(h)} title={i === 0 ? "Tab — подставить" : undefined}>
+              <b>{h.label}</b><span>{h.kind}{h.extra ? ` · ${h.extra}` : ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <form onSubmit={(e) => { e.preventDefault(); submit(text); }}>
         <textarea ref={input} rows={3} value={text} onChange={(e) => setText(e.target.value)}
           className={awaitingFix ? "await" : ""}
           placeholder={awaitingFix ? "Что поправить в плане? Например: «даты с 10 ноября», «без Санкт-Петербурга», «короче заголовок»" : "Опишите задачу: продукт, аудитория, место размещения, сроки…"}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(text); } }} />
+          onKeyDown={(e) => {
+            if (e.key === "Tab" && showHints) { e.preventDefault(); accept(hints[0]); return; }
+            if (e.key === "Escape" && showHints) { setHintsOff(word); return; }
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(text); }
+          }} />
         <button type="submit" className="send" disabled={busy || !text.trim()} aria-label="Отправить"><IconSend size={18} /></button>
       </form>
     </section>

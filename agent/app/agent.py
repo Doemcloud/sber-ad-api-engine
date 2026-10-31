@@ -24,6 +24,7 @@ from . import validators as V
 from .api_client import ApiClient, ApiError
 from .explain import explain
 from .compliance import check_creative, check_message
+from .hints import extract_choices, next_steps, recommendations
 from .llm import LLM
 from .tools import TOOLS, schemas
 
@@ -90,6 +91,7 @@ class Session:
     updated_at: str = field(default_factory=lambda: stamp())
     transcript: list = field(default_factory=list)  # лента для UI: реплики, итоги выполнения — для истории
     awaiting_fix: dict | None = None  # менеджер отменил план — ждём, что исправить
+    choices: list = field(default_factory=list)  # варианты ответа из последней реплики ассистента
 
 
 SESSIONS: dict[str, Session] = {}
@@ -214,6 +216,7 @@ class Agent:
 
     def _run(self, s: Session) -> str:
         s.plan = []
+        s.choices = []
         reply = ""
         start = len(s.messages)
         for _ in range(MAX_STEPS):
@@ -231,7 +234,9 @@ class Agent:
             calls = resp.get("tool_calls") or []
             s.messages.append({"role": "assistant", "content": resp.get("content") or "", "tool_calls": calls})
             if not calls:
-                reply = resp.get("content") or ""
+                # служебная строка «Варианты: …» — в кнопки интерфейса, не в текст
+                reply, s.choices = extract_choices(resp.get("content") or "")
+                s.messages[-1]["content"] = reply
                 break
             for c in calls:
                 result = self.call_tool(s, c["name"], c.get("arguments") or {})
@@ -605,4 +610,20 @@ class Agent:
                 out["validation"] = v
             except ApiError:
                 out["campaign"] = None
+        # подсказки: варианты из реплики модели, иначе — следующий логичный шаг; и рекомендации по кампании
+        c, v = out.get("campaign"), out.get("validation")
+        try:
+            d = self.dicts()
+        except ApiError:
+            d = {}
+        # пока план ждёт подтверждения, рекомендации не показываем — план обычно их и закрывает
+        out["recommendations"] = [] if s.pending else recommendations(c, v, d, s.role)
+        chips = list(s.choices) or next_steps(bool(s.pending), bool(s.awaiting_fix), c, v, s.role)
+        if not s.choices and "Покажи, что можно улучшить" in chips:
+            i = chips.index("Покажи, что можно улучшить")
+            if out["recommendations"]:
+                chips[i] = out["recommendations"][0]["title"]
+            else:
+                chips.pop(i)
+        out["suggestions"] = chips[:4]
         return out

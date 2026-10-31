@@ -66,8 +66,10 @@ class Transcript:
         p = st.get("pending_action")
         if p:
             self.lines += ["> **Ассистент предлагает (нужно подтверждение):**"] + [f"> {s['n']}. {s['summary']}" for s in p["steps"]] + [""]
-        for r in st.get("last_result") or []:
-            pass
+        if st.get("suggestions") and not p:
+            self.lines += ["_Подсказки-кнопки: " + " · ".join(f"«{x}»" for x in st["suggestions"]) + "_", ""]
+        if st.get("recommendations"):
+            self.lines += ["_Рекомендации: " + "; ".join(r["title"] for r in st["recommendations"]) + "_", ""]
 
     def confirm(self, st: dict):
         self.lines += ["_Менеджер нажимает «Подтвердить»._", ""]
@@ -121,7 +123,8 @@ class Scenarios(unittest.TestCase):
                 "Аудитория — таргетинг по сегментам «Возраст 26–45» (24 млн), «Москва» (13 млн), «Санкт-Петербург» (5,6 млн); "
                 "клиент попадает в аудиторию, если входит хотя бы в один сегмент. Исключаем тех, кто отписался от рекламы.\n\n"
                 "Уточню два момента:\n1) «Промо на главном» — это сторис в промо-блоке главного экрана или смарт-баннер на главном? Предлагаю сторис.\n"
-                "2) Добавить тег «Вклад»? Без тегов кампанию сложнее найти в отчётах."),
+                "2) Добавить тег «Вклад»? Без тегов кампанию сложнее найти в отчётах.\n"
+                "Варианты: Сторис и тег «Вклад» | Смарт-баннер и тег «Вклад» | Сторис без тега"),
             calls(call("validate_banner", bannerTypeId=1, content={**story, "title": long_title})),
             calls(call("create_campaign", campaign=campaign, ref="camp"),
                   call("set_segments", campaign_id="$camp", included=["AGE_26_45", "CITY_MSK", "CITY_SPB"], excluded=["EXC_UNSUBSCRIBED"]),
@@ -130,7 +133,7 @@ class Scenarios(unittest.TestCase):
                   call("create_creative", campaign_id="$camp", name="Сторис iOS", bannerId="$banner1", contentId="$content1", channelCode="iOS"),
                   call("create_creative", campaign_id="$camp", name="Сторис Android", bannerId="$banner1", contentId="$content1", channelCode="ANDROID"),
                   call("create_creative", campaign_id="$camp", name="Сторис Web", bannerId="$banner1", channelCode="WEB")),
-            say("Подготовил кампанию «Вклад 16%: до конца года»: сторис в промо-блоке главного экрана, тег «Вклад», обычный приоритет показа. "
+            say("Подготовил кампанию «Вклад 16%: до конца года»: сторис в промо-блоке главного экрана, тег «Вклад». "
                 "Сторис «Вклад под 16% до конца года» ведёт на промо-экран с кнопкой «Открыть вклад»; размещаем в iOS и Android — "
                 "в веб-версии сторис не показываются. Заголовок первого варианта не помещался в формат, я его сократил. Проверьте и подтвердите."),
         ])

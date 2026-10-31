@@ -28,3 +28,4 @@ export const IconHistory = svg(<><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" /><path d
 export const IconPlus = svg(<path d="M12 5v14M5 12h14" />);
 export const IconTrash = svg(<><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></>);
 export const IconLogout = svg(<><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4M6 12h10" /></>);
+export const IconBulb = svg(<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" /></>);

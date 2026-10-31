@@ -139,6 +139,8 @@ export interface AgentState {
   journal: JournalEntry[];
   awaiting_fix?: boolean;
   title?: string;
+  suggestions?: string[];          // кнопки быстрых ответов под репликой ассистента
+  recommendations?: Recommendation[];
   transcript?: TranscriptItem[];
 }
 
@@ -185,3 +187,6 @@ export interface CampaignStats {
   age: StatShare[]; gender: StatShare[]; cities: StatShare[]; platforms: StatShare[]; places: StatShare[];
   note: string;
 }
+
+// Рекомендация ассистента по текущей кампании: что сделать и почему; prompt — готовая просьба.
+export interface Recommendation { id: string; title: string; why: string; prompt: string }
