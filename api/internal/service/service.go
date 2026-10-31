@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -585,6 +586,42 @@ func (s *Service) Warnings(id int64) (ValidationResult, *domain.APIError) {
 	s.st.Lock()
 	defer s.st.Unlock()
 	return s.validate(id)
+}
+
+// FeedEntry — запись ленты событий для «Главной» и уведомлений: аудит + название кампании.
+type FeedEntry struct {
+	domain.AuditEntry
+	CampaignName string `json:"campaignName"`
+}
+
+// Feed — последние записи аудита по всем кампаниям, свежие сверху.
+func (s *Service) Feed(limit int) []FeedEntry {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	s.st.Lock()
+	defer s.st.Unlock()
+	all := make([]domain.AuditEntry, len(s.st.S.Audit))
+	copy(all, s.st.S.Audit)
+	// по времени события (в моках порядок записей не совпадает с хронологией), при равенстве — по id
+	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].At != all[j].At {
+			return all[i].At > all[j].At
+		}
+		return all[i].ID > all[j].ID
+	})
+	out := []FeedEntry{}
+	for _, e := range all {
+		if len(out) == limit {
+			break
+		}
+		name := ""
+		if c, ok := s.st.S.Campaigns[e.CampaignID]; ok {
+			name = c.Name
+		}
+		out = append(out, FeedEntry{AuditEntry: e, CampaignName: name})
+	}
+	return out
 }
 
 func (s *Service) Audit(id int64) ([]domain.AuditEntry, *domain.APIError) {

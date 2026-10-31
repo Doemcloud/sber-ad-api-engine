@@ -130,6 +130,10 @@ func (a *API) Routes() http.Handler {
 	}))
 
 	m.HandleFunc("GET /campaigns/{id}/warnings", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Warnings(id(r)) }))
+	m.HandleFunc("GET /audit", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		writeJSON(w, 200, a.S.Feed(n))
+	})
 	m.HandleFunc("GET /campaigns/{id}/stats", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Stats(id(r), r.URL.Query().Get("period")) }))
 	m.HandleFunc("GET /campaigns/{id}/audit", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Audit(id(r)) }))
 

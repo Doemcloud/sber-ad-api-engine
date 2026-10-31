@@ -24,6 +24,7 @@ interface Props {
   awaitingFix?: boolean; // план отменён — ассистент ждёт, что исправить
   showExamples?: boolean;
   suggestions?: string[]; // быстрые ответы под последней репликой ассистента
+  draft?: { text: string; n: number } | null; // подставить текст в поле ввода (не отправляя)
 }
 
 interface Hint { label: string; kind: string; extra?: string }
@@ -65,11 +66,12 @@ function whenLabel(iso: string) {
 }
 
 export default function Chat(props: Props) {
-  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix, showExamples = true, suggestions = [] } = props;
+  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix, showExamples = true, suggestions = [], draft } = props;
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (awaitingFix && !busy) input.current?.focus(); }, [awaitingFix, busy]);
+  useEffect(() => { if (draft) { setText(draft.text); input.current?.focus(); } }, [draft?.n]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [items, plan, busy]);
 
   const { word, hints } = useMemo(() => findHints(text, dicts), [text, dicts]);

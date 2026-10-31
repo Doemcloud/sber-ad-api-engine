@@ -2,6 +2,7 @@ import type {
   AgentState, AuditEntry, CampaignStats, HistoryItem, BannerType, CampaignDetails, CampaignListItem,
   Dicts, Place, Role, Segment, Tag, Topic, Validation,
 } from "./types";
+import type { FeedEntry } from "./events";
 
 const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env ?? {};
 export const AGENT_URL = env.VITE_AGENT_URL ?? "http://localhost:8000";
@@ -76,6 +77,7 @@ export const api = {
   campaign: (id: number) => req<CampaignDetails>(`${API_URL}/campaigns/${id}`),
   warnings: (id: number) => req<Validation>(`${API_URL}/campaigns/${id}/warnings`),
   audit: (id: number) => req<AuditEntry[]>(`${API_URL}/campaigns/${id}/audit`),
+  feed: (limit = 50) => req<FeedEntry[]>(`${API_URL}/audit?limit=${limit}`),
   stats: (id: number, period = "all") => req<CampaignStats>(`${API_URL}/campaigns/${id}/stats?period=${period}`),
   dicts: async (): Promise<Dicts> => {
     const [topics, tags, bannerTypes, segments, places] = await Promise.all([

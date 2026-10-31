@@ -26,7 +26,7 @@ export default function LoginPage({ onLogin }: { onLogin: (a: Auth) => void }) {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <div className="login-brand"><div className="brand">С</div><div><b>Рекламный кабинет</b><span>СберБанк Онлайн</span></div></div>
+        <div className="login-brand"><span className="brand-icon">✦</span><div><b>Campaign AI</b><span>Личный кабинет предприятия</span></div></div>
         <h1>Вход</h1>
         <p className="muted">Войдите, чтобы заводить рекламные кампании с ассистентом или проверять их на модерации.</p>
         <label className="field"><span>Логин</span>

@@ -29,3 +29,7 @@ export const IconPlus = svg(<path d="M12 5v14M5 12h14" />);
 export const IconTrash = svg(<><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></>);
 export const IconLogout = svg(<><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4M6 12h10" /></>);
 export const IconBulb = svg(<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" /></>);
+export const IconHome = svg(<><path d="M4 11.5 12 5l8 6.5" /><path d="M6 10v9h12v-9" /><path d="M10 19v-5h4v5" /></>);
+export const IconMenu = svg(<path d="M4 7h16M4 12h16M4 17h16" />);
+export const IconClose = svg(<path d="M6 6l12 12M18 6 6 18" />);
+export const IconUser = svg(<><circle cx="12" cy="8" r="4" /><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6" /></>);

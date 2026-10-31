@@ -309,3 +309,19 @@ func TestResumeStoppedCampaign(t *testing.T) {
 		t.Fatalf("период закончился: %v", e)
 	}
 }
+
+func TestFeed(t *testing.T) {
+	s := newSvc(t)
+	f := s.Feed(5)
+	if len(f) != 5 {
+		t.Fatalf("лента: %d записей", len(f))
+	}
+	for i := 1; i < len(f); i++ {
+		if f[i].At > f[i-1].At {
+			t.Fatalf("лента должна идти от свежих к старым: %s после %s", f[i].At, f[i-1].At)
+		}
+	}
+	if f[0].CampaignName == "" {
+		t.Fatalf("нет названия кампании: %+v", f[0])
+	}
+}

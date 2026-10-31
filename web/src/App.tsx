@@ -8,7 +8,10 @@ import CampaignList from "./components/CampaignList";
 import DictsPage from "./components/DictsPage";
 import ReviewPage from "./components/ReviewPage";
 import { IconBulb, IconShield } from "./components/Icons";
-import { Sidebar, Topbar, type Page } from "./components/Shell";
+import { Footer, ScrollButton, Sidebar, Topbar, type Page } from "./components/Shell";
+import HomePage from "./components/HomePage";
+import NewCampaignPage from "./components/NewCampaignPage";
+import { isNotification, type FeedEntry } from "./events";
 import LoginPage from "./components/LoginPage";
 import StatsPage from "./components/StatsPage";
 import ModerationPage from "./components/ModerationPage";
@@ -39,7 +42,31 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   SID_KEY = `sber-ad.assistant.sid.${auth.user.login}`; // у каждого пользователя — свой текущий диалог
   const role = auth.user.role;
   const manager = role === "campaignManager";
-  const [page, setPage] = useState<Page>(manager ? "assistant" : "moderation");
+  const [page, setPageRaw] = useState<Page>(manager ? "home" : "moderation");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [draft, setDraft] = useState<{ text: string; n: number } | null>(null); // текст в поле чата (кнопка «Возникла проблема»)
+  const [pageEl, setPageEl] = useState<HTMLElement | null>(null);
+  const seenKey = `sber-ad.seen.${auth.user.login}`;
+  const [seen, setSeen] = useState<number>(() => { try { return Number(localStorage.getItem(seenKey) ?? 0); } catch { return 0; } });
+  const setPage = (p: Page) => { setPageRaw(p); setMenuOpen(false); };
+
+  // лента событий для «Главной» и уведомлений: обновляем раз в 30 секунд
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.feed(60).then((f) => { if (alive) setFeed(f); }).catch(() => undefined);
+    load();
+    const t = window.setInterval(load, 30000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, []);
+  const notifications = feed.filter((e) => isNotification(e, role));
+  const unread = notifications.filter((e) => e.id > seen).length;
+  const markSeen = () => {
+    const top = notifications[0]?.id ?? seen;
+    setSeen(top);
+    try { localStorage.setItem(seenKey, String(top)); } catch { /* ok */ }
+  };
+
   const [query, setQuery] = useState("");
   const [sid, setSid] = useState(() => storedSid() ?? newSid());
   const [state, setState] = useState<AgentState | null>(null);
@@ -134,6 +161,30 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
     }
   }
 
+  // контейнер прокрутки текущей страницы — для кнопки ↑/↓
+  useEffect(() => {
+    const t = window.setTimeout(() => setPageEl(page === "assistant" ? null : document.querySelector<HTMLElement>(".workspace > .page")), 50);
+    return () => window.clearTimeout(t);
+  }, [page, reviewId]);
+
+  // мастер «Новая кампания» → новый диалог с ассистентом и бриф первым сообщением
+  function startFromWizard(brief: string) {
+    forgetSid();
+    const id = newSid();
+    setSid(id);
+    setState(null);
+    setItems([GREETING, { kind: "user", text: brief }]);
+    setPageRaw("assistant");
+    setBusy(true);
+    setError(null);
+    agent.chat(id, brief, who.user, role).then((st) => {
+      setState(st);
+      rememberSid(st.session_id);
+      if (st.campaign_id) setReviewId(st.campaign_id);
+      if (st.transcript) setItems(toItems(st.transcript));
+    }).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
+  }
+
   function openReview(id: number) {
     setReviewId(id);
     setPage("review");
@@ -154,18 +205,27 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   }, [state, dicts]);
 
   return (
-    <div className="shell">
-      <Sidebar page={page} role={role} onNavigate={(p) => (p === "review" && !reviewId ? setPage("campaigns") : setPage(p))} />
+    <div className="app">
+      <Topbar name={auth.user.name} title={auth.user.title} query={query} onLogout={onLogout}
+        onMenu={() => setMenuOpen(true)} onHome={() => setPage(manager ? "home" : "moderation")}
+        notifications={notifications} unread={unread} onOpenNotifications={markSeen} onOpenEvent={(e) => openReview(e.campaignId)}
+        onQuery={(q) => { setQuery(q); if (q && ["home", "new", "assistant", "settings", "review"].includes(page)) setPage("campaigns"); }} />
+      <Sidebar page={page} role={role} open={menuOpen} onClose={() => setMenuOpen(false)}
+        onNavigate={(p) => (p === "review" && !reviewId ? setPage("campaigns") : setPage(p))} />
       <div className="workspace">
-        <Topbar page={page} name={auth.user.name} title={auth.user.title} query={query} onLogout={onLogout}
-          onQuery={(q) => { setQuery(q); if (q && ["assistant", "settings", "review"].includes(page)) setPage("campaigns"); }} />
         {error && <div className="toast err">{error}</div>}
 
+        {page === "home" && manager && (
+          <HomePage feed={feed} onOpenCampaign={openReview} onNavigate={setPage}>
+            <Footer role={role} onNavigate={setPage} onProblem={() => { setPage("assistant"); setDraft({ text: "Возникла проблема: ", n: Date.now() }); }} />
+          </HomePage>
+        )}
+        {page === "new" && manager && <NewCampaignPage dicts={dicts} onSubmit={startFromWizard} onCancel={() => setPage("home")} />}
         {page === "assistant" && manager && (
           <div className="page assistant">
             <Chat items={items} busy={busy} plan={state?.pending_action ?? null} dicts={dicts} onSend={send} onDecide={decide} onReset={reset}
               sid={sid} history={history} historyOpen={historyOpen} onToggleHistory={toggleHistory} onOpenSession={openSession} onDeleteSession={deleteSession}
-              awaitingFix={!!state?.awaiting_fix} showExamples={loadPrefs().examples} suggestions={state?.suggestions} />
+              awaitingFix={!!state?.awaiting_fix} showExamples={loadPrefs().examples} suggestions={state?.suggestions} draft={draft} />
             <div className="col side-col">
               {state?.campaign ? (
                 <>
@@ -211,6 +271,7 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
         {page === "dicts" && manager && <DictsPage dicts={dicts} query={query} />}
         {page === "settings" && <SettingsPage user={auth.user} onLogout={onLogout} onHistoryCleared={() => { forgetSid(); setSid(newSid()); setState(null); setItems([GREETING]); setHistory(null); }} />}
       </div>
+      <ScrollButton target={pageEl} />
     </div>
   );
 }
