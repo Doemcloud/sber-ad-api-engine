@@ -14,6 +14,7 @@ import json
 import os
 import ssl
 import time
+import urllib.error
 import urllib.request
 import uuid
 from typing import Protocol
@@ -62,46 +63,82 @@ class OpenAICompatible:
 
 
 class GigaChat:
-    """Нативный API GigaChat: OAuth-токен + /chat/completions с functions.
-    GIGACHAT_AUTH_KEY — ключ авторизации (Basic) из личного кабинета;
-    GIGACHAT_SCOPE — GIGACHAT_API_PERS | GIGACHAT_API_B2B | GIGACHAT_API_CORP;
-    GIGACHAT_CA_BUNDLE — путь к сертификату НУЦ Минцифры (или GIGACHAT_VERIFY_SSL=0 на демо)."""
+    """Нативный API GigaChat (developers.sber.ru/docs/ru/gigachat).
+
+    Авторизация: OAuth-токен по ключу авторизации (Basic = base64 «client_id:client_secret»),
+    токен живёт ~30 минут и обновляется сам. Вызов инструментов — через functions /
+    function_call (GigaChat вызывает одну функцию за сообщение, агент крутит цикл).
+
+    Переменные окружения:
+      GIGACHAT_AUTH_KEY      — ключ авторизации из кабинета; или пара
+      GIGACHAT_CLIENT_ID + GIGACHAT_CLIENT_SECRET — ключ соберётся сам;
+      GIGACHAT_SCOPE         — GIGACHAT_API_PERS | GIGACHAT_API_B2B | GIGACHAT_API_CORP;
+      LLM_MODEL              — по умолчанию GigaChat-3-Ultra;
+      GIGACHAT_BASE_URL      — по умолчанию https://api.giga.chat/v1 (единый адрес с 16.07.2026);
+      GIGACHAT_OAUTH_URL     — по умолчанию https://ngw.devices.sberbank.ru:9443/api/v2/oauth;
+      GIGACHAT_CA_BUNDLE     — путь к сертификату «Russian Trusted Root CA» (Минцифры);
+      GIGACHAT_VERIFY_SSL=0  — отключить проверку сертификата (только для демо)."""
 
     def __init__(self):
-        self.auth_key = os.getenv("GIGACHAT_AUTH_KEY", "")
+        self.auth_key = gigachat_auth_key()
         self.scope = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
-        self.model = os.getenv("LLM_MODEL", "GigaChat-2-Max")
+        self.model = os.getenv("LLM_MODEL") or "GigaChat-3-Ultra"
         self.oauth_url = os.getenv("GIGACHAT_OAUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth")
-        self.base = os.getenv("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1").rstrip("/")
+        self.base = os.getenv("GIGACHAT_BASE_URL", "https://api.giga.chat/v1").rstrip("/")
         ca = os.getenv("GIGACHAT_CA_BUNDLE")
         self.ctx = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
         if os.getenv("GIGACHAT_VERIFY_SSL", "1") == "0":
             self.ctx.check_hostname, self.ctx.verify_mode = False, ssl.CERT_NONE
         self._token, self._exp = "", 0.0
 
-    def _auth(self) -> str:
-        if self._token and time.time() < self._exp - 60:
+    def _auth(self, force: bool = False) -> str:
+        if self._token and not force and time.time() < self._exp - 60:
             return self._token
         r = _post(self.oauth_url, f"scope={self.scope}", {
             "Authorization": f"Basic {self.auth_key}", "RqUID": str(uuid.uuid4()),
             "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}, self.ctx)
-        self._token, self._exp = r["access_token"], r.get("expires_at", 0) / 1000
+        exp = float(r.get("expires_at") or 0)
+        self._token = r["access_token"]
+        self._exp = exp / 1000 if exp > 1e11 else (exp or time.time() + 1500)  # expires_at — в миллисекундах
         return self._token
 
-    def complete(self, messages: list[dict], tools: list[dict]) -> dict:
+    @staticmethod
+    def _json_object(text: str) -> str:
+        """Результат функции GigaChat принимает только как JSON-объект в строке."""
+        try:
+            v = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return json.dumps({"result": text}, ensure_ascii=False)
+        return text if isinstance(v, dict) else json.dumps({"result": v}, ensure_ascii=False)
+
+    def _messages(self, messages: list[dict]) -> list[dict]:
         msgs = []
         for m in messages:
             if m["role"] == "assistant" and m.get("tool_calls"):
                 c = m["tool_calls"][0]  # GigaChat вызывает одну функцию за сообщение
-                msgs.append({"role": "assistant", "content": m.get("content") or "", "function_call": {"name": c["name"], "arguments": c["arguments"]}})
+                a = {"role": "assistant", "content": m.get("content") or "",
+                     "function_call": {"name": c["name"], "arguments": c["arguments"]}}
+                if c.get("state_id"):
+                    a["functions_state_id"] = c["state_id"]
+                msgs.append(a)
             elif m["role"] == "tool":
-                msgs.append({"role": "function", "name": m.get("name", ""), "content": m["content"]})
+                msgs.append({"role": "function", "name": m.get("name", ""), "content": self._json_object(m["content"])})
             else:
-                msgs.append({"role": m["role"], "content": m["content"]})
-        body = {"model": self.model, "messages": msgs, "temperature": 0.2, "function_call": "auto",
+                msgs.append({"role": m["role"], "content": m["content"] or ""})
+        return msgs
+
+    def complete(self, messages: list[dict], tools: list[dict]) -> dict:
+        body = {"model": self.model, "messages": self._messages(messages), "temperature": 0.2, "function_call": "auto",
                 "functions": [{"name": t["name"], "description": t["description"], "parameters": t["parameters"]} for t in tools]}
-        r = _post(f"{self.base}/chat/completions", body, {
-            "Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {self._auth()}"}, self.ctx)
+        url = f"{self.base}/chat/completions"
+        hdr = lambda: {"Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {self._auth()}"}
+        try:
+            r = _post(url, body, hdr(), self.ctx)
+        except urllib.error.HTTPError as e:
+            if e.code != 401:
+                raise RuntimeError(f"GigaChat {e.code}: {e.read().decode(errors='replace')[:500]}") from e
+            self._auth(force=True)  # токен истёк — обновить и повторить один раз
+            r = _post(url, body, hdr(), self.ctx)
         msg = r["choices"][0]["message"]
         fc = msg.get("function_call")
         calls = []
@@ -109,8 +146,15 @@ class GigaChat:
             args = fc.get("arguments") or {}
             if isinstance(args, str):
                 args = json.loads(args or "{}")
-            calls.append({"id": "call_" + uuid.uuid4().hex[:8], "name": fc["name"], "arguments": args})
+            calls.append({"id": "call_" + uuid.uuid4().hex[:8], "name": fc["name"], "arguments": args,
+                          "state_id": msg.get("functions_state_id")})
         return {"content": msg.get("content"), "tool_calls": calls}
+
+
+def gigachat_auth_key() -> str:
+    key = os.getenv("GIGACHAT_AUTH_KEY", "").strip()
+    cid, sec = os.getenv("GIGACHAT_CLIENT_ID", "").strip(), os.getenv("GIGACHAT_CLIENT_SECRET", "").strip()
+    return key or (basic_key(cid, sec) if cid and sec else "")
 
 
 class NotConfigured:
@@ -124,7 +168,7 @@ class NotConfigured:
 def from_env() -> LLM:
     provider = os.getenv("LLM_PROVIDER", "openai").lower()
     if provider == "gigachat":
-        return GigaChat() if os.getenv("GIGACHAT_AUTH_KEY") else NotConfigured()
+        return GigaChat() if gigachat_auth_key() else NotConfigured()
     return OpenAICompatible() if os.getenv("LLM_API_KEY") else NotConfigured()
 
 

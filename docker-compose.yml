@@ -18,6 +18,8 @@ services:
         required: false
     environment:
       API_URL: http://api:8080
+    volumes:
+      - ./certs:/certs:ro   # сертификат Минцифры для GigaChat (GIGACHAT_CA_BUNDLE)
     depends_on: [api]
 
   web:

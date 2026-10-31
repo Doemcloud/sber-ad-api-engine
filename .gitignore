@@ -6,3 +6,6 @@ __pycache__/
 api/state/
 *.log
 .DS_Store
+certs/*.crt
+certs/*.cer
+certs/*.pem

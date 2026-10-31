@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -24,7 +25,7 @@ from .llm import LLM
 from .tools import TOOLS, schemas
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "system.md"
-MAX_STEPS = 14
+MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "30"))  # GigaChat вызывает по одной функции за ответ
 FORMAT_RU = {"STORY": "сторис", "SMART_BANNER": "смарт-баннер"}
 CHANNEL_RU = {"iOS": "iOS", "ANDROID": "Android", "WEB": "веб-версия"}
 HEADER_KEYS = ["name", "marketingName", "startDate", "startTime", "endDate", "endTime", "topic", "tags",
@@ -33,6 +34,21 @@ HEADER_KEYS = ["name", "marketingName", "startDate", "startTime", "endDate", "en
 
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def clip_json(result, limit: int = 12000) -> str:
+    """Результат инструмента для модели: всегда валидный JSON, даже если обрезан."""
+    text = json.dumps(result, ensure_ascii=False, default=str)
+    if len(text) <= limit:
+        return text
+    if isinstance(result, list):
+        n = len(result)
+        while n > 1 and len(text) > limit:
+            n //= 2
+            text = json.dumps({"items": result[:n], "shown": n, "total": len(result)}, ensure_ascii=False, default=str)
+        if len(text) <= limit:
+            return text
+    return json.dumps({"truncated": True, "preview": text[: limit - 100]}, ensure_ascii=False)
 
 
 @dataclass
@@ -109,7 +125,7 @@ class Agent:
             for c in calls:
                 result = self.call_tool(s, c["name"], c.get("arguments") or {})
                 s.messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
-                                   "content": json.dumps(result, ensure_ascii=False, default=str)[:12000]})
+                                   "content": clip_json(result)})
         else:
             reply = "Слишком много шагов подряд — остановился. Уточните задачу."
         if s.plan:

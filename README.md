@@ -7,7 +7,7 @@ SibКод · кейс 1 · команда SUPh. AI-ассистент для з�
 ## Запуск
 
 ```bash
-cp .env.example .env          # LLM_API_KEY или GIGACHAT_AUTH_KEY
+cp .env.example .env          # ключ GigaChat (см. раздел GigaChat)
 docker compose up --build
 ```
 
@@ -54,7 +54,21 @@ web (React + TS) ──/chat, /confirm──▶ agent (Python) ──REST + X-Us
 5. Частичная правка — `GET → слияние → PUT` полного объекта, как требует семантика PUT.
 6. Журнал действий агента (кто, что, когда) — в состоянии сессии; серверный аудит — в API.
 
-LLM — за слоем абстракции (`app/llm.py`): `LLM_PROVIDER=openai` (любой OpenAI-совместимый API) или `gigachat` (нативный API GigaChat, целевая модель банка). Промпт — `agent/prompts/system.md`.
+LLM — за слоем абстракции (`app/llm.py`): `LLM_PROVIDER=gigachat` (нативный API GigaChat, модель заказчика) или `openai` (любой OpenAI-совместимый API). Промпт — `agent/prompts/system.md`.
+
+### GigaChat
+
+По умолчанию — `GigaChat-3-Ultra` через единый адрес `https://api.giga.chat/v1`, вызов инструментов через `functions` / `function_call`. В `.env`:
+
+```env
+LLM_PROVIDER=gigachat
+GIGACHAT_AUTH_KEY=<ключ авторизации>          # или GIGACHAT_CLIENT_ID + GIGACHAT_CLIENT_SECRET
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+LLM_MODEL=GigaChat-3-Ultra
+GIGACHAT_CA_BUNDLE=/certs/russian_trusted_root_ca.crt   # или GIGACHAT_VERIFY_SSL=0 на демо
+```
+
+Проверка ключа одной командой: `cd agent && python gigachat_check.py` — получит токен, покажет доступные модели и проверит вызов функции. Особенности GigaChat, которые учитывает адаптер: одна функция за ответ (агент делает до `AGENT_MAX_STEPS=30` шагов), результат функции — только JSON-объект, токен живёт ~30 минут и обновляется по 401. Протокол покрыт тестом с эмулятором (`tests/test_gigachat.py`).
 
 **Интерфейс (React)** — полностью на русском, языком маркетолога: никаких технических кодов, статусов-констант и JSON. Статусы («Черновик», «На модерации», «На доработке», «Одобрена», «Запущена»), форматы («Сторис», «Смарт-баннер», «Промо-экран»), сегменты и места размещения показываются по названиям из справочников; словарь и функция `humanize()` — `web/src/ru.ts`. Ассистент получает то же правило в промпте (раздел «Язык»), а сообщения об ошибках в `data/mock/validation_rules.json` переписаны простыми словами. Оболочка с боковой панелью и верхней строкой (поиск, выбор роли «менеджер» / «модератор») и четыре экрана:
 
