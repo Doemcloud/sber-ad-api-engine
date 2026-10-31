@@ -14,7 +14,7 @@ docker compose up --build
 | Сервис | Адрес |
 | --- | --- |
 | Интерфейс | http://localhost:3000 |
-| Pangolin DB | localhost:5432, база `adcamp` (образ — `PANGOLIN_IMAGE`, по умолчанию совместимый PostgreSQL 16) |
+| PostgreSQL | localhost:5432, база `adcamp` |
 | AI-агент | http://localhost:8000 (`/docs` — Swagger, `/tools` — схемы инструментов) |
 | API кампаний | http://localhost:8080 |
 
@@ -44,11 +44,11 @@ cd agent && python -m unittest discover -s tests -t .      # валидатор�
 ## Как это устроено
 
 ```
-web (React + TS) ──/chat, /confirm──▶ agent (Python) ──REST + X-User/X-Role──▶ api (Go) ──▶ Platform V Pangolin DB
+web (React + TS) ──/chat, /confirm──▶ agent (Python) ──REST + X-User/X-Role──▶ api (Go) ──▶ PostgreSQL
        └──────────────── справочники, кампании, аудит (чтение) ────────────────────▶ api
 ```
 
-**API (Go)** повторяет поверхность §3 ТЗ: 7 справочников, `POST /places` и `/tags`, 22 операции с кампаниями и дочерними сущностями, `GET /warnings`, `GET /audit`, заглушка CBRO. Роль проверяется первой (`ROLE_FORBIDDEN`), затем состояние (`*_NOT_ALLOWED`). Ошибки — `400 {"errors":[{code,message,field}]}`, ссылки на несуществующее — `404 ENTITY_NOT_FOUND`. Каждая пишущая операция и переход статуса пишется в аудит с diff изменённых полей. Хранение — **Platform V Pangolin DB** (PostgreSQL-совместимая СУБД СберТеха): схема по доменной модели ТЗ, ограничения целостности в самой БД, каждая запись — одной транзакцией, пустая БД заполняется моками заказчика. Подробно — [`docs/database.md`](docs/database.md).
+**API (Go)** повторяет поверхность §3 ТЗ: 7 справочников, `POST /places` и `/tags`, 22 операции с кампаниями и дочерними сущностями, `GET /warnings`, `GET /audit`, заглушка CBRO. Роль проверяется первой (`ROLE_FORBIDDEN`), затем состояние (`*_NOT_ALLOWED`). Ошибки — `400 {"errors":[{code,message,field}]}`, ссылки на несуществующее — `404 ENTITY_NOT_FOUND`. Каждая пишущая операция и переход статуса пишется в аудит с diff изменённых полей. Хранение — **PostgreSQL 16**: схема по доменной модели ТЗ, ограничения целостности в самой БД, каждая запись — одной транзакцией, пустая БД заполняется моками заказчика. Подробно — [`docs/database.md`](docs/database.md).
 
 **Агент (Python)** — tool calling: по инструменту на каждый вызов API (`docs/tools.json`). Гарантии держит код, а не промпт:
 

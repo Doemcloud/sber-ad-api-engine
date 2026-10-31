@@ -1,17 +1,17 @@
-# База данных: Platform V Pangolin DB
+# База данных: PostgreSQL
 
-Сервис кампаний хранит данные в **Platform V Pangolin DB** — СУБД СберТеха на основе PostgreSQL. Схема повторяет доменную модель ТЗ (§2). Приложение использует только стандартный SQL и протокол PostgreSQL, поэтому работает с Pangolin без изменений.
+Сервис кампаний хранит данные в **PostgreSQL 16**. Схема повторяет доменную модель ТЗ (§2).
 
 ## Как запускается
 
-- `docker compose up` поднимает сервис `db`. Образ задаётся переменной `PANGOLIN_IMAGE`. Pangolin распространяет СберТех по запросу ([pangolin.sbertech.ru](https://pangolin.sbertech.ru)), публичного образа нет. Поэтому по умолчанию стоит совместимый `postgres:16-alpine`: так прототип запускается на любой машине.
+- `docker compose up` поднимает сервис `db` (образ `postgres:16-alpine`, данные — в томе `db-data`).
 - API подключается по `DATABASE_URL` и при старте применяет схему: `api/internal/store/migrations/001_schema.sql`, скрипт идемпотентен. Если база пустая, API заполняет её моками заказчика из `data/mock/`.
 - Если `DATABASE_URL` не задан (unit-тесты, быстрый запуск без СУБД), используется файл-снимок `STATE_FILE`.
 
-Чтобы подключиться к Pangolin на стенде, укажите адрес его экземпляра:
+Чтобы подключиться к внешнему PostgreSQL, укажите его адрес:
 
 ```env
-DATABASE_URL=postgres://user:password@pangolin-host:5432/adcamp?sslmode=require
+DATABASE_URL=postgres://user:password@db-host:5432/adcamp?sslmode=require
 ```
 
 ## Схема (по ТЗ §2)

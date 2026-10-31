@@ -1,8 +1,7 @@
 services:
-  # Platform V Pangolin DB (СберТех, на основе PostgreSQL). Дистрибутив Pangolin выдаёт СберТех;
-  # получив образ, укажите его в PANGOLIN_IMAGE. По умолчанию — совместимый PostgreSQL 16 для локального запуска.
+  # PostgreSQL 16 — данные кампаний (схема по ТЗ, миграции применяет API)
   db:
-    image: ${PANGOLIN_IMAGE:-postgres:16-alpine}
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: adcamp
       POSTGRES_USER: adcamp

@@ -1,5 +1,5 @@
 // Package store — хранилище: рабочее состояние в памяти под общей блокировкой,
-// постоянное хранение — Platform V Pangolin DB (pg.go, при заданном DATABASE_URL)
+// постоянное хранение — PostgreSQL (pg.go, при заданном DATABASE_URL)
 // или, для тестов и запуска без СУБД, снимок в JSON-файл. Сид — из mocks/.
 package store
 
@@ -39,7 +39,7 @@ type Store struct {
 	mu        sync.Mutex
 	S         *State
 	statePath string
-	pg        *pgBackend // Pangolin DB; nil — режим без СУБД
+	pg        *pgBackend // PostgreSQL; nil — режим без СУБД
 }
 
 // Lock/Unlock — сервис держит блокировку на всю операцию (проверка + запись).
@@ -192,7 +192,7 @@ func (st *Store) Next(kind string) int64 {
 	return id
 }
 
-// Save фиксирует состояние: в Pangolin DB транзакцией, иначе снимком в файл (атомарно).
+// Save фиксирует состояние: в PostgreSQL транзакцией, иначе снимком в файл (атомарно).
 func (st *Store) Save() error {
 	if st.pg != nil {
 		return st.pg.save(st.S)

@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// Интеграционный тест хранилища в Pangolin DB / PostgreSQL.
+// Интеграционный тест хранилища в PostgreSQL.
 // Запуск: TEST_DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=disable go test ./internal/store/
 // БД должна быть пустой: тест заполнит её из моков и проверит, что состояние читается обратно без потерь.
-func TestPangolinRoundTrip(t *testing.T) {
+func TestPostgresRoundTrip(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL не задан")

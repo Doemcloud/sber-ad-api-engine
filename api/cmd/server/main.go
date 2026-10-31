@@ -31,9 +31,9 @@ func main() {
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
 		st, err = store.OpenDB(mockDir, dsn)
 		if err != nil {
-			log.Fatalf("Pangolin DB: %v", err)
+			log.Fatalf("PostgreSQL: %v", err)
 		}
-		log.Printf("хранилище: Pangolin DB (%s)", store.DescribeDSN(dsn))
+		log.Printf("хранилище: PostgreSQL (%s)", store.DescribeDSN(dsn))
 	} else {
 		st, err = store.Open(mockDir, env("STATE_FILE", "./state/state.json"))
 		if err != nil {
