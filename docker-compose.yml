@@ -7,8 +7,8 @@ services:
       - api-state:/state
     environment:
       PORT: 8080
-      SEED_DIR: /data/mock
-      STATE_DIR: /state
+      MOCK_DIR: /data/mock
+      STATE_FILE: /state/state.json
 
   agent:
     build: ./agent

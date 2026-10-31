@@ -1,259 +1,182 @@
+// Package httpapi — HTTP-поверхность MVP (task.md §3): 7 справочников,
+// POST /places и /tags, 22 операции с кампаниями и дочерними сущностями.
 package httpapi
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
+	"log"
 	"net/http"
-	"slices"
-	"strings"
-	"time"
+	"strconv"
 
-	"adcamp/api/internal/domain"
-	"adcamp/api/internal/store"
+	"adcamp/internal/domain"
+	"adcamp/internal/service"
 )
 
-type API struct{ S store.Store }
+type API struct{ S *service.Service }
 
 func (a *API) Routes() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 
-	// Справочники: чтение и создание (сегменты и рекламодатели создаются из диалога).
-	for _, c := range []string{"segments", "placements", "advertisers", "creative_types"} {
-		coll := c
-		m.HandleFunc("GET /api/"+coll, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, a.S.List(coll)) })
-		m.HandleFunc("GET /api/"+coll+"/{id}", a.getOne(coll))
+	for _, name := range []string{"topics", "tags", "channels", "banner-types", "segment-types", "segments", "places"} {
+		n := name
+		m.HandleFunc("GET /"+n, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, a.S.Dictionary(n)) })
 	}
-	m.HandleFunc("POST /api/segments", a.createRef("segments", "seg", []string{"name", "conditions"}))
-	m.HandleFunc("POST /api/advertisers", a.createRef("advertisers", "adv", []string{"name", "inn", "category"}))
+	m.HandleFunc("POST /places", a.body(func(ac service.Actor, _ *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.CreatePlace(ac, b)
+	}, 201))
+	m.HandleFunc("POST /tags", a.body(func(ac service.Actor, _ *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.CreateTag(ac, b)
+	}, 201))
 
-	// Кампании.
-	m.HandleFunc("GET /api/campaigns", a.listCampaigns)
-	m.HandleFunc("GET /api/campaigns/{id}", a.getOne("campaigns"))
-	m.HandleFunc("POST /api/campaigns", a.createCampaign)
-	m.HandleFunc("PUT /api/campaigns/{id}", a.updateCampaign)
-	m.HandleFunc("POST /api/campaigns/{id}/status", a.changeStatus)
-	m.HandleFunc("POST /api/campaigns/validate", a.validateDraft)
-	m.HandleFunc("GET /api/schema/required", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, 200, map[string]any{"required": domain.RequiredFields, "statuses": domain.Statuses})
-	})
-	return cors(m)
+	m.HandleFunc("GET /campaigns", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, a.S.List()) })
+	m.HandleFunc("GET /campaigns/{id}", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Get(id(r)) }))
+	m.HandleFunc("POST /campaigns", a.body(func(ac service.Actor, _ *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.Create(ac, b)
+	}, 201))
+	m.HandleFunc("PUT /campaigns/{id}", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.Update(ac, id(r), b)
+	}, 200))
+	m.HandleFunc("DELETE /campaigns/{id}", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return nil, a.S.Delete(ac, id(r))
+	}))
+	m.HandleFunc("PUT /campaigns/{id}/segments", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.PutSegments(ac, id(r), b)
+	}, 200))
+
+	// баннеры, контент, креативы
+	m.HandleFunc("POST /campaigns/{id}/banners", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveBanner(ac, id(r), 0, b)
+	}, 201))
+	m.HandleFunc("PUT /campaigns/{id}/banners/{cid}", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveBanner(ac, id(r), cid(r), b)
+	}, 200))
+	m.HandleFunc("DELETE /campaigns/{id}/banners/{cid}", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return nil, a.S.DeleteBanner(ac, id(r), cid(r))
+	}))
+	m.HandleFunc("POST /campaigns/{id}/contents", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveContent(ac, id(r), 0, b)
+	}, 201))
+	m.HandleFunc("PUT /campaigns/{id}/contents/{cid}", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveContent(ac, id(r), cid(r), b)
+	}, 200))
+	m.HandleFunc("DELETE /campaigns/{id}/contents/{cid}", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return nil, a.S.DeleteContent(ac, id(r), cid(r))
+	}))
+	m.HandleFunc("POST /campaigns/{id}/creatives", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveCreative(ac, id(r), 0, b)
+	}, 201))
+	m.HandleFunc("PUT /campaigns/{id}/creatives/{cid}", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		return a.S.SaveCreative(ac, id(r), cid(r), b)
+	}, 200))
+	m.HandleFunc("DELETE /campaigns/{id}/creatives/{cid}", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return nil, a.S.DeleteCreative(ac, id(r), cid(r))
+	}))
+
+	m.HandleFunc("GET /campaigns/{id}/warnings", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Warnings(id(r)) }))
+	m.HandleFunc("GET /campaigns/{id}/audit", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Audit(id(r)) }))
+
+	// жизненный цикл
+	m.HandleFunc("POST /campaigns/{id}/to-moderation", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return a.S.ToModeration(ac, id(r))
+	}))
+	m.HandleFunc("POST /campaigns/{id}/decline", a.body(func(ac service.Actor, r *http.Request, b map[string]any) (any, *domain.APIError) {
+		c, _ := b["comment"].(string)
+		return a.S.Decline(ac, id(r), c)
+	}, 200))
+	m.HandleFunc("POST /campaigns/{id}/approve", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return a.S.Approve(ac, id(r))
+	}))
+	m.HandleFunc("POST /campaigns/{id}/activate", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return a.S.Activate(ac, id(r))
+	}))
+	m.HandleFunc("POST /campaigns/{id}/stop", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
+		return a.S.Stop(ac, id(r))
+	}))
+
+	// заглушка CBRO (mocks/cbro_export.json)
+	m.HandleFunc("POST /mock/cbro/export", a.body(func(_ service.Actor, _ *http.Request, b map[string]any) (any, *domain.APIError) {
+		v, _ := b["campaignId"].(float64)
+		return a.S.CBROExport(int64(v)), nil
+	}, 200))
+
+	return withHeaders(m)
 }
 
-func (a *API) getOne(coll string) http.HandlerFunc {
+func actor(r *http.Request) service.Actor {
+	return service.Actor{User: r.Header.Get("X-User"), Role: r.Header.Get("X-Role")}
+}
+
+func id(r *http.Request) int64  { n, _ := strconv.ParseInt(r.PathValue("id"), 10, 64); return n }
+func cid(r *http.Request) int64 { n, _ := strconv.ParseInt(r.PathValue("cid"), 10, 64); return n }
+
+func (a *API) read(fn func(*http.Request) (any, *domain.APIError)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		d, err := a.S.Get(coll, r.PathValue("id"))
-		if errors.Is(err, store.ErrNotFound) {
-			writeErr(w, 404, "не найдено")
-			return
-		}
-		writeJSON(w, 200, d)
+		v, e := fn(r)
+		respond(w, v, e, 200)
 	}
 }
 
-func (a *API) createRef(coll, prefix string, required []string) http.HandlerFunc {
+func (a *API) noBody(fn func(service.Actor, *http.Request) (any, *domain.APIError)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		d, ok := readDoc(w, r)
-		if !ok {
+		v, e := fn(actor(r), r)
+		code := 200
+		if v == nil && e == nil {
+			code = 204
+		}
+		respond(w, v, e, code)
+	}
+}
+
+func (a *API) body(fn func(service.Actor, *http.Request, map[string]any) (any, *domain.APIError), okCode int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&b); err != nil {
+			respond(w, nil, domain.Fail("BODY_INVALID", "", err.Error()), 0)
 			return
 		}
-		for _, f := range required {
-			if d[f] == nil || d[f] == "" {
-				writeErr(w, 422, "не заполнено поле "+f)
-				return
-			}
-		}
-		d["id"] = newID(prefix)
-		d["created_at"] = now()
-		if err := a.S.Put(coll, d); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		writeJSON(w, 201, d)
+		v, e := fn(actor(r), r, b)
+		respond(w, v, e, okCode)
 	}
 }
 
-// listCampaigns: фильтры ?status=&advertiser_id=&placement_id=&segment_id=&q=
-func (a *API) listCampaigns(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	out := []store.Doc{}
-	for _, c := range a.S.List("campaigns") {
-		if v := q.Get("status"); v != "" && c["status"] != v {
-			continue
-		}
-		if v := q.Get("advertiser_id"); v != "" && c["advertiser_id"] != v {
-			continue
-		}
-		if v := q.Get("placement_id"); v != "" && !containsStr(c["placement_ids"], v) {
-			continue
-		}
-		if v := q.Get("segment_id"); v != "" && !containsStr(c["segment_ids"], v) {
-			continue
-		}
-		if v := strings.ToLower(q.Get("q")); v != "" && !strings.Contains(strings.ToLower(str(c["name"])), v) {
-			continue
-		}
-		out = append(out, c)
-	}
-	writeJSON(w, 200, out)
-}
-
-// createCampaign сохраняет даже неполный черновик: итог работы ассистента
-// должен быть в БД. Статус ставится по результату валидации.
-func (a *API) createCampaign(w http.ResponseWriter, r *http.Request) {
-	d, ok := readDoc(w, r)
-	if !ok {
+func respond(w http.ResponseWriter, v any, e *domain.APIError, okCode int) {
+	if e != nil {
+		writeJSON(w, e.Status, map[string]any{"errors": e.Errors})
 		return
 	}
-	d["id"] = newID("cmp")
-	d["created_at"] = now()
-	a.saveCampaign(w, d, 201)
-}
-
-func (a *API) updateCampaign(w http.ResponseWriter, r *http.Request) {
-	old, err := a.S.Get("campaigns", r.PathValue("id"))
-	if err != nil {
-		writeErr(w, 404, "кампания не найдена")
+	if okCode == 204 {
+		w.WriteHeader(204)
 		return
 	}
-	patch, ok := readDoc(w, r)
-	if !ok {
-		return
-	}
-	if st := str(old["status"]); slices.Contains([]string{"moderation", "active"}, st) {
-		writeErr(w, 409, "кампанию в статусе "+st+" менять нельзя: сначала верните в черновик или поставьте на паузу")
-		return
-	}
-	merged := store.Doc{}
-	for k, v := range old {
-		merged[k] = v
-	}
-	for k, v := range patch {
-		merged[k] = v
-	}
-	merged["id"], merged["created_at"] = old["id"], old["created_at"]
-	// Любая правка одобренной кампании возвращает её на согласование.
-	if old["status"] == "approved" {
-		merged["status"] = "draft"
-	}
-	a.saveCampaign(w, merged, 200)
-}
-
-func (a *API) saveCampaign(w http.ResponseWriter, d store.Doc, code int) {
-	problems := domain.Validate(d, a.S)
-	st := str(d["status"])
-	if st == "" || st == "draft" || st == "needs_info" || st == "ready" {
-		if len(problems) > 0 {
-			d["status"] = "needs_info"
-		} else {
-			d["status"] = "ready"
-		}
-	}
-	d["updated_at"] = now()
-	if err := a.S.Put("campaigns", d); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	writeJSON(w, code, map[string]any{"campaign": d, "problems": problems})
-}
-
-func (a *API) changeStatus(w http.ResponseWriter, r *http.Request) {
-	c, err := a.S.Get("campaigns", r.PathValue("id"))
-	if err != nil {
-		writeErr(w, 404, "кампания не найдена")
-		return
-	}
-	body, ok := readDoc(w, r)
-	if !ok {
-		return
-	}
-	to := str(body["status"])
-	from := str(c["status"])
-	if !domain.CanTransition(from, to) {
-		writeErr(w, 409, "переход "+from+" → "+to+" запрещён")
-		return
-	}
-	if to == "moderation" {
-		if p := domain.Validate(c, a.S); len(p) > 0 {
-			writeJSON(w, 422, map[string]any{"error": "кампания неполная", "problems": p})
-			return
-		}
-	}
-	c["status"] = to
-	c["updated_at"] = now()
-	if err := a.S.Put("campaigns", c); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	writeJSON(w, 200, c)
-}
-
-func (a *API) validateDraft(w http.ResponseWriter, r *http.Request) {
-	d, ok := readDoc(w, r)
-	if !ok {
-		return
-	}
-	p := domain.Validate(d, a.S)
-	missing := []string{}
-	for _, x := range p {
-		missing = append(missing, x.Field)
-	}
-	writeJSON(w, 200, map[string]any{"complete": len(p) == 0, "problems": p, "missing": missing})
-}
-
-// --- helpers ---
-
-func readDoc(w http.ResponseWriter, r *http.Request) (store.Doc, bool) {
-	var d store.Doc
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	if err := dec.Decode(&d); err != nil {
-		writeErr(w, 400, "некорректный JSON: "+err.Error())
-		return nil, false
-	}
-	return d, true
+	writeJSON(w, okCode, v)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("encode: %v", err)
+	}
 }
 
-func writeErr(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
-}
-
-func cors(h http.Handler) http.Handler {
+// withHeaders: CORS для фронта и эхо X-User/X-Role в ответе (task.md §3).
+func withHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User, X-Role")
+		w.Header().Set("Access-Control-Expose-Headers", "X-User, X-Role")
+		if u := r.Header.Get("X-User"); u != "" {
+			w.Header().Set("X-User", u)
+		}
+		if role := r.Header.Get("X-Role"); role != "" {
+			w.Header().Set("X-Role", role)
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(204)
 			return
 		}
 		h.ServeHTTP(w, r)
 	})
-}
-
-func newID(prefix string) string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return prefix + "_" + hex.EncodeToString(b)
-}
-
-func now() string { return time.Now().UTC().Format(time.RFC3339) }
-
-func str(v any) string { s, _ := v.(string); return s }
-
-func containsStr(v any, s string) bool {
-	arr, _ := v.([]any)
-	for _, x := range arr {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

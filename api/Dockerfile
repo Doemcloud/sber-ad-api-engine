@@ -7,6 +7,6 @@ RUN CGO_ENABLED=0 go build -o /out/api ./cmd/server
 FROM alpine:3.20
 WORKDIR /app
 COPY --from=build /out/api /app/api
-ENV PORT=8080 SEED_DIR=/data/mock STATE_DIR=/state
+ENV PORT=8080 MOCK_DIR=/data/mock STATE_FILE=/state/state.json
 EXPOSE 8080
 CMD ["/app/api"]
