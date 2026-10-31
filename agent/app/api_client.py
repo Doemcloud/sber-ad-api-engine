@@ -6,6 +6,11 @@ import json
 import os
 import urllib.error
 import urllib.request
+from contextvars import ContextVar
+
+# Токен вошедшего пользователя на время обработки запроса к агенту: агент ходит в API
+# строго от его имени и с его правами (роль API берёт из токена, а не из заголовков).
+CURRENT_TOKEN: ContextVar[str | None] = ContextVar("current_token", default=None)
 
 
 class ApiError(Exception):
@@ -18,7 +23,7 @@ class ApiClient:
     def __init__(self, base: str | None = None, timeout: float = 20):
         self.base = (base or os.getenv("API_URL", "http://localhost:8080")).rstrip("/")
         self.timeout = timeout
-        # Агент — доверенный сервис: действует от имени пользователя, которого уже проверил по токену.
+        # Запасной режим для фоновых вызовов без пользователя: общий ключ сервиса (необязателен).
         self.service_key = os.getenv("SERVICE_KEY", "")
 
     def request(self, method: str, path: str, body: dict | None = None, user: str = "", role: str = ""):
@@ -29,7 +34,10 @@ class ApiClient:
             req.add_header("X-User", user)
         if role:
             req.add_header("X-Role", role)
-        if self.service_key:
+        token = CURRENT_TOKEN.get()
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        elif self.service_key:
             req.add_header("X-Service-Key", self.service_key)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:

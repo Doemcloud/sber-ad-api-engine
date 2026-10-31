@@ -12,7 +12,7 @@ const WEIGHT: Record<string, number> = { thin: 100, light: 300, regular: 400, me
 
 function textCss(s?: TextStyle, fallbackSize = 14): React.CSSProperties {
   return {
-    fontSize: s?.fontSize ?? fallbackSize,
+    fontSize: typeof s?.fontSize === "number" ? Math.min(Math.max(s.fontSize, 8), 48) : fallbackSize,
     fontWeight: s?.fontWeight ? WEIGHT[s.fontWeight] : undefined,
     color: rgba(s?.textColor),
   };
@@ -27,7 +27,8 @@ function safeHtml(text: string): string {
 // Картинки из моков на домене .example не резолвятся — показываем подложку.
 function Img({ src, className, style }: { src?: string; className?: string; style?: React.CSSProperties }) {
   const [broken, setBroken] = useState(false);
-  if (!src || broken) return <div className={`img-fallback ${className ?? ""}`} style={style} aria-label="изображение" />;
+  // только https: никаких javascript:/data:/http-ссылок из текста креатива
+  if (!src || broken || !/^https:\/\//i.test(src)) return <div className={`img-fallback ${className ?? ""}`} style={style} aria-label="изображение" />;
   return <img className={className} style={style} src={src} alt="" onError={() => setBroken(true)} />;
 }
 

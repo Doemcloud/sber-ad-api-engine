@@ -6,15 +6,17 @@ import time
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .agent import SESSIONS, Agent, load_sessions, save_sessions
-from .api_client import ApiClient, ApiError
+from .api_client import CURRENT_TOKEN, ApiClient, ApiError
 from .llm import from_env
 from .tools import schemas
 
 app = FastAPI(title="AI-ассистент рекламных кампаний")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=_origins or ["*"], allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "Authorization"])
 agent = Agent(ApiClient(), from_env())
 load_sessions()  # история диалогов переживает перезапуск
 
@@ -32,12 +34,16 @@ def who(authorization: str | None) -> dict | None:
         return None
     hit = _ME.get(tok)
     if hit and time.time() - hit[0] < 60:
+        CURRENT_TOKEN.set(tok)
         return hit[1]
     try:
         u = agent.api.me(tok)
     except ApiError as e:
         raise HTTPException(401 if e.status != 503 else 503, e.errors[0]["message"]) from None
+    if len(_ME) > 1000:  # кэш проверенных токенов не растёт бесконечно
+        _ME.clear()
     _ME[tok] = (time.time(), u)
+    CURRENT_TOKEN.set(tok)  # дальше агент ходит в API от имени этого пользователя
     return u
 
 
@@ -56,23 +62,26 @@ def own(sid: str, me: dict | None):
     return s
 
 
+SID = r"^[A-Za-z0-9_-]{1,64}$"
+
+
 class ChatIn(BaseModel):
-    session_id: str | None = None
-    message: str
-    user: str | None = None
-    role: str | None = None
+    session_id: str | None = Field(default=None, pattern=SID)
+    message: str = Field(min_length=1, max_length=4000)  # длинные простыни — лишние токены и лимиты GigaChat
+    user: str | None = Field(default=None, max_length=64)
+    role: str | None = Field(default=None, max_length=32)
 
 
 class ConfirmIn(BaseModel):
-    session_id: str
-    action_id: str
+    session_id: str = Field(pattern=SID)
+    action_id: str = Field(max_length=32)
     approved: bool = True
-    note: str = ""
+    note: str = Field(default="", max_length=2000)
 
 
 class RoleIn(BaseModel):
-    user: str
-    role: str
+    user: str = Field(max_length=64)
+    role: str = Field(max_length=32)
 
 
 @app.get("/health")

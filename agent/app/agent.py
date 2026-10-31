@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field, fields
@@ -36,6 +37,20 @@ HEADER_KEYS = ["name", "marketingName", "startDate", "startTime", "endDate", "en
 
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+_PATH_PARAM = re.compile(r"{(\w+)}")
+
+
+def fill_path(path: str, args: dict) -> str:
+    """Подставляет id в путь API. Принимаются только целые числа — модель не может
+    подсунуть «101/../auth» и попасть в чужой эндпоинт."""
+    def one(m):
+        v = args[m.group(1)]
+        if isinstance(v, bool) or not (isinstance(v, int) or (isinstance(v, str) and v.isdigit())):
+            raise ValueError(f"{m.group(1)} должен быть числом, получено {v!r}")
+        return str(int(v))
+    return _PATH_PARAM.sub(one, path)
 
 
 def stamp() -> str:
@@ -242,7 +257,7 @@ class Agent:
             if kind == "read":
                 if "campaign_id" in args:
                     s.campaign_id = int(args["campaign_id"])
-                return self.api.get(path.format(**args), user=s.user, role=s.role)
+                return self.api.get(fill_path(path, args), user=s.user, role=s.role)
             if kind == "local":
                 return self._local(name, args)
             return self._propose(s, name, args)
@@ -519,7 +534,7 @@ class Agent:
     def _execute(self, s: Session, st: dict):
         name, a = st["tool"], self._resolve(s, st["args"])
         method, path = TOOLS[name][1], TOOLS[name][2]
-        url = path.format(**{k: v for k, v in a.items() if isinstance(v, (int, str))})
+        url = fill_path(path, a)
         kw = {"user": s.user, "role": s.role}
         if "campaign_id" in a:
             s.campaign_id = a["campaign_id"]

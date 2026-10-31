@@ -35,12 +35,20 @@ export async function login(loginName: string, password: string): Promise<Auth> 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...((init?.headers as Record<string, string>) ?? {}) };
   if (auth && !url.endsWith("/auth/login")) headers.Authorization = `Bearer ${auth.token}`;
-  const r = await fetch(url, { ...init, headers });
+  let r: Response;
+  try {
+    r = await fetch(url, { ...init, headers });
+  } catch {
+    const who = url.startsWith(AGENT_URL) ? "ассистентом" : "рекламным кабинетом";
+    throw new Error(`Нет связи с ${who}. Проверьте подключение и отправьте ещё раз.`);
+  }
   if (r.status === 401 && auth && !url.endsWith("/auth/login")) { saveAuth(null); onExpired(); }
   const text = await r.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: any = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = null; } // например, HTML-страница прокси при 502
   if (!r.ok) {
-    const msg = body?.errors?.map((e: { message: string }) => e.message).join("; ") ?? body?.detail ?? `HTTP ${r.status}`;
+    const detail = Array.isArray(body?.detail) ? "Запрос не прошёл проверку — сократите сообщение или повторите" : body?.detail;
+    const msg = body?.errors?.map((e: { message: string }) => e.message).join("; ") ?? detail ?? `Сервер ответил ошибкой (${r.status}) — повторите позже`;
     throw new Error(msg);
   }
   return body as T;

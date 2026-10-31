@@ -9,7 +9,9 @@ import (
 	"strconv"
 
 	"crypto/subtle"
+	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"adcamp/internal/auth"
@@ -26,6 +28,44 @@ type API struct {
 	Auth       *auth.Auth
 	Required   bool
 	ServiceKey string
+	Origins    map[string]bool // разрешённые источники CORS; пусто — любой (режим разработки)
+
+	loginMu   sync.Mutex
+	loginHits map[string][]time.Time // попытки входа по IP — защита от перебора паролей
+}
+
+const (
+	loginLimit  = 10
+	loginWindow = time.Minute
+)
+
+// allowLogin — не больше loginLimit попыток входа с одного адреса за loginWindow.
+func (a *API) allowLogin(r *http.Request) bool {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	now := time.Now()
+	a.loginMu.Lock()
+	defer a.loginMu.Unlock()
+	if a.loginHits == nil {
+		a.loginHits = map[string][]time.Time{}
+	}
+	recent := a.loginHits[ip][:0]
+	for _, t := range a.loginHits[ip] {
+		if now.Sub(t) < loginWindow {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= loginLimit {
+		a.loginHits[ip] = recent
+		return false
+	}
+	a.loginHits[ip] = append(recent, now)
+	if len(a.loginHits) > 10000 { // не копим адреса бесконечно
+		a.loginHits = map[string][]time.Time{ip: a.loginHits[ip]}
+	}
+	return true
 }
 
 func (a *API) Routes() http.Handler {
@@ -140,6 +180,11 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		authError(w, 503, "AUTH_DISABLED", "Вход не настроен")
 		return
 	}
+	if !a.allowLogin(r) {
+		w.Header().Set("Retry-After", "60")
+		authError(w, 429, "AUTH_TOO_MANY", "Слишком много попыток входа — подождите минуту")
+		return
+	}
 	tok, u, exp, err := a.Auth.Login(b.Login, b.Password)
 	if err != nil {
 		authError(w, 401, "AUTH_INVALID", "Неверный логин или пароль")
@@ -230,7 +275,14 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 // withHeaders: CORS для фронта, проверка входа и эхо X-User/X-Role в ответе (task.md §3).
 func (a *API) withHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if origin := r.Header.Get("Origin"); len(a.Origins) == 0 {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if a.Origins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User, X-Role, X-Service-Key")
 		w.Header().Set("Access-Control-Expose-Headers", "X-User, X-Role")
@@ -238,7 +290,7 @@ func (a *API) withHeaders(h http.Handler) http.Handler {
 			w.WriteHeader(204)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/auth/") {
+		if !strings.HasPrefix(r.URL.Path, "/auth/") && r.URL.Path != "/health" {
 			if tok := bearer(r); tok != "" && a.Auth != nil {
 				u, err := a.Auth.Verify(tok)
 				if err != nil {
@@ -248,12 +300,9 @@ func (a *API) withHeaders(h http.Handler) http.Handler {
 				r.Header.Set("X-User", u.User) // роль — только из токена
 				r.Header.Set("X-Role", u.Role)
 			} else if a.Required && !a.trustedService(r) {
-				r.Header.Del("X-User")
-				r.Header.Del("X-Role")
-				if r.Method != http.MethodGet {
-					authError(w, 401, "AUTH_REQUIRED", "Войдите в рекламный кабинет")
-					return
-				}
+				// без входа данные кабинета недоступны ни на чтение, ни на запись
+				authError(w, 401, "AUTH_REQUIRED", "Войдите в рекламный кабинет")
+				return
 			}
 		}
 		if u := r.Header.Get("X-User"); u != "" {

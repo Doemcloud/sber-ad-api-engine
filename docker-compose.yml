@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-adcamp}
     volumes:
       - db-data:/var/lib/postgresql/data
-    ports: ["5432:5432"]
+    ports: ["${BIND_HOST:-127.0.0.1}:5432:5432"]   # наружу — только локально
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U adcamp -d adcamp"]
       interval: 2s
@@ -17,7 +17,7 @@ services:
 
   api:
     build: ./api
-    ports: ["8080:8080"]
+    ports: ["${BIND_HOST:-127.0.0.1}:8080:8080"]
     volumes:
       - ./data/mock:/data/mock:ro
     environment:
@@ -25,23 +25,23 @@ services:
       MOCK_DIR: /data/mock
       DATABASE_URL: postgres://adcamp:${DB_PASSWORD:-adcamp}@db:5432/adcamp?sslmode=disable
       AUTH_REQUIRED: "1"                                     # писать в API — только после входа
-      AUTH_SECRET: ${AUTH_SECRET:-sber-ad-dev-secret-change-me}
-      SERVICE_KEY: ${SERVICE_KEY:-sber-ad-service-key}      # агент действует от имени вошедшего
+      AUTH_SECRET: ${AUTH_SECRET:-}                          # пусто — случайный ключ при каждом запуске
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     depends_on:
       db:
         condition: service_healthy
 
   agent:
     build: ./agent
-    ports: ["8000:8000"]
+    ports: ["${BIND_HOST:-127.0.0.1}:8000:8000"]
     env_file:
       - path: .env
         required: false
     environment:
       API_URL: http://api:8080
       SESSIONS_FILE: /state/sessions.json   # история диалогов ассистента
-      AUTH_REQUIRED: "1"
-      SERVICE_KEY: ${SERVICE_KEY:-sber-ad-service-key}
+      AUTH_REQUIRED: "1"                    # агент ходит в API с токеном вошедшего пользователя
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - agent-state:/state
       - ./certs:/certs:ro   # сертификат Минцифры для GigaChat (GIGACHAT_CA_BUNDLE)
@@ -53,7 +53,7 @@ services:
       args:
         VITE_AGENT_URL: http://localhost:8000
         VITE_API_URL: http://localhost:8080
-    ports: ["3000:80"]
+    ports: ["${BIND_HOST:-127.0.0.1}:3000:80"]
     depends_on: [agent, api]
 
 volumes:

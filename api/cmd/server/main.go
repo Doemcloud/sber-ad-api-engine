@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"adcamp/internal/auth"
@@ -47,11 +50,32 @@ func main() {
 	if err != nil {
 		log.Fatalf("AUTH_TTL: %v", err)
 	}
-	au, err := auth.Load(filepath.Join(mockDir, "users.json"), env("AUTH_SECRET", "sber-ad-dev-secret-change-me"), ttl)
+	secret := os.Getenv("AUTH_SECRET")
+	if secret == "" {
+		// без заданного ключа — случайный на каждый запуск: подделать токен нельзя,
+		// после перезапуска API пользователи просто входят заново
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatal(err)
+		}
+		secret = hex.EncodeToString(b)
+		log.Printf("AUTH_SECRET не задан — сгенерирован случайный ключ подписи токенов")
+	} else if len(secret) < 16 {
+		log.Fatalf("AUTH_SECRET слишком короткий: нужно не меньше 16 символов")
+	}
+	au, err := auth.Load(filepath.Join(mockDir, "users.json"), secret, ttl)
 	if err != nil {
 		log.Fatalf("учётки: %v", err)
 	}
-	api := &httpapi.API{S: service.New(st), Auth: au, Required: env("AUTH_REQUIRED", "0") == "1", ServiceKey: os.Getenv("SERVICE_KEY")}
-	log.Printf("вход по логину: обязателен=%v", api.Required)
-	log.Fatal(http.ListenAndServe(addr, api.Routes()))
+	origins := map[string]bool{}
+	for _, o := range strings.Split(os.Getenv("CORS_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			origins[o] = true
+		}
+	}
+	api := &httpapi.API{S: service.New(st), Auth: au, Required: env("AUTH_REQUIRED", "0") == "1", ServiceKey: os.Getenv("SERVICE_KEY"), Origins: origins}
+	log.Printf("вход по логину: обязателен=%v; CORS: %d источник(ов)", api.Required, len(origins))
+	srv := &http.Server{Addr: addr, Handler: api.Routes(),
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 64 << 10}
+	log.Fatal(srv.ListenAndServe())
 }

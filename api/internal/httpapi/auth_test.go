@@ -70,8 +70,14 @@ func TestLoginAndRoles(t *testing.T) {
 	if code, _ := call(h, "POST", "/campaigns/103/approve", "", map[string]string{"X-User": "petrova.m", "X-Role": "campaignModerator"}); code != 401 {
 		t.Fatalf("запись без входа: ждали 401, получили %d", code)
 	}
-	if code, _ := call(h, "GET", "/campaigns", "", nil); code != 200 {
-		t.Fatalf("чтение без входа: %d", code)
+	if code, _ := call(h, "GET", "/campaigns", "", nil); code != 401 {
+		t.Fatalf("чтение без входа: ждали 401, получили %d", code)
+	}
+	if code, _ := call(h, "GET", "/campaigns", "", map[string]string{"Authorization": "Bearer " + client}); code != 200 {
+		t.Fatalf("чтение после входа: %d", code)
+	}
+	if code, _ := call(h, "GET", "/health", "", nil); code != 200 {
+		t.Fatalf("health без входа: %d", code)
 	}
 	// менеджер с токеном не станет модератором, подставив X-Role
 	code, out := call(h, "POST", "/campaigns/103/decline", `{"comment":"x"}`, map[string]string{"Authorization": "Bearer " + client, "X-Role": "campaignModerator"})
@@ -94,3 +100,29 @@ func TestLoginAndRoles(t *testing.T) {
 }
 
 func jsonStr(v any) string { b, _ := json.Marshal(v); return string(b) }
+
+func TestLoginRateLimitAndCORS(t *testing.T) {
+	h := newAPI(t)
+	var last int
+	for i := 0; i < 12; i++ {
+		last, _ = call(h, "POST", "/auth/login", `{"login":"client","password":"nope"}`, nil)
+	}
+	if last != 429 {
+		t.Fatalf("перебор паролей: ждали 429 после 10 попыток, получили %d", last)
+	}
+
+	if err := domain.LoadCatalog(filepath.Join(mockDir, "validation_rules.json")); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := store.Open(mockDir, "")
+	api := (&API{S: service.New(st), Origins: map[string]bool{"http://localhost:3000": true}}).Routes()
+	for origin, want := range map[string]string{"http://localhost:3000": "http://localhost:3000", "https://evil.example": ""} {
+		r := httptest.NewRequest("OPTIONS", "/campaigns", nil)
+		r.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != want {
+			t.Fatalf("CORS для %s: %q, ждали %q", origin, got, want)
+		}
+	}
+}
