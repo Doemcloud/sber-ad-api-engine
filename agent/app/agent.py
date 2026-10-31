@@ -115,8 +115,19 @@ class Agent:
     def _run(self, s: Session) -> str:
         s.plan = []
         reply = ""
+        start = len(s.messages)
         for _ in range(MAX_STEPS):
-            resp = self.llm.complete([self._system(s)] + s.messages, self.tools)
+            try:
+                resp = self.llm.complete([self._system(s)] + s.messages, self.tools)
+            except Exception as e:  # лимиты/сеть модели: ответить человеку, а не уронить сервис
+                self.log(s, "llm_error", str(e)[:300])
+                del s.messages[start:]  # недоделанный ход не оставляем в истории модели
+                s.plan = []
+                busy = "429" in str(e) or "Too Many" in str(e)
+                reply = ("GigaChat сейчас перегружен запросами — я не успел закончить. Повторите сообщение через минуту."
+                         if busy else "Не удалось связаться с моделью. Повторите сообщение чуть позже.")
+                s.messages.append({"role": "assistant", "content": reply})
+                return reply
             calls = resp.get("tool_calls") or []
             s.messages.append({"role": "assistant", "content": resp.get("content") or "", "tool_calls": calls})
             if not calls:

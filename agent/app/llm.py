@@ -13,11 +13,16 @@ import base64
 import json
 import os
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
 from typing import Protocol
+
+
+class LLMUnavailable(RuntimeError):
+    """Модель временно недоступна (лимиты, сеть). Агент отвечает человеку, а не падает."""
 
 
 class LLM(Protocol):
@@ -69,22 +74,35 @@ class GigaChat:
     токен живёт ~30 минут и обновляется сам. Вызов инструментов — через functions /
     function_call (GigaChat вызывает одну функцию за сообщение, агент крутит цикл).
 
+    Физлицам (в т.ч. Freemium) GigaChat даёт ОДИН поток: параллельный запрос получает 429.
+    Поэтому все запросы процесса идут строго по очереди через общий замок, а 429/5xx
+    повторяются с растущей паузой.
+
     Переменные окружения:
       GIGACHAT_AUTH_KEY      — ключ авторизации из кабинета; или пара
       GIGACHAT_CLIENT_ID + GIGACHAT_CLIENT_SECRET — ключ соберётся сам;
       GIGACHAT_SCOPE         — GIGACHAT_API_PERS | GIGACHAT_API_B2B | GIGACHAT_API_CORP;
       LLM_MODEL              — по умолчанию GigaChat-3-Ultra;
-      GIGACHAT_BASE_URL      — по умолчанию https://api.giga.chat/v1 (единый адрес с 16.07.2026);
+      GIGACHAT_BASE_URL      — адрес API или несколько через запятую; по умолчанию пробуется
+                               https://api.giga.chat/v1 (единый адрес с 16.07.2026), затем
+                               https://gigachat.devices.sberbank.ru/api/v1 — берётся первый доступный;
       GIGACHAT_OAUTH_URL     — по умолчанию https://ngw.devices.sberbank.ru:9443/api/v2/oauth;
       GIGACHAT_CA_BUNDLE     — путь к сертификату «Russian Trusted Root CA» (Минцифры);
-      GIGACHAT_VERIFY_SSL=0  — отключить проверку сертификата (только для демо)."""
+      GIGACHAT_VERIFY_SSL=0  — отключить проверку сертификата (только для демо);
+      GIGACHAT_MAX_RETRIES   — повторов при 429/5xx/сбое сети (по умолчанию 5, паузы 2→4→8→16→30 с);
+      GIGACHAT_MIN_INTERVAL  — минимальная пауза между запросами, с (по умолчанию 0.3)."""
+
+    _lock = threading.Lock()  # один поток на весь процесс агента
+    _last = 0.0
 
     def __init__(self):
         self.auth_key = gigachat_auth_key()
         self.scope = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
         self.model = os.getenv("LLM_MODEL") or "GigaChat-3-Ultra"
         self.oauth_url = os.getenv("GIGACHAT_OAUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth")
-        self.base = os.getenv("GIGACHAT_BASE_URL", "https://api.giga.chat/v1").rstrip("/")
+        urls = os.getenv("GIGACHAT_BASE_URL") or "https://api.giga.chat/v1,https://gigachat.devices.sberbank.ru/api/v1"
+        self.bases = [u.strip().rstrip("/") for u in urls.split(",") if u.strip()]
+        self.base = self.bases[0] if len(self.bases) == 1 else ""
         ca = os.getenv("GIGACHAT_CA_BUNDLE")
         self.ctx = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
         if os.getenv("GIGACHAT_VERIFY_SSL", "1") == "0":
@@ -101,6 +119,27 @@ class GigaChat:
         self._token = r["access_token"]
         self._exp = exp / 1000 if exp > 1e11 else (exp or time.time() + 1500)  # expires_at — в миллисекундах
         return self._token
+
+    def pick_base(self) -> str:
+        """Первый адрес API, до которого есть соединение (GET /models, короткий таймаут)."""
+        if self.base:
+            return self.base
+        errors = []
+        for b in self.bases:
+            try:
+                req = urllib.request.Request(f"{b}/models", headers={"Authorization": f"Bearer {self._auth()}", "Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=float(os.getenv("GIGACHAT_PROBE_TIMEOUT", "8")), context=self.ctx):
+                    pass
+                self.base = b
+                return b
+            except urllib.error.HTTPError as e:
+                if e.code < 500:  # сервер ответил — адрес рабочий
+                    self.base = b
+                    return b
+                errors.append(f"{b}: HTTP {e.code}")
+            except OSError as e:
+                errors.append(f"{b}: {getattr(e, 'reason', e)}")
+        raise LLMUnavailable("GigaChat недоступен ни по одному адресу: " + "; ".join(errors))
 
     @staticmethod
     def _json_object(text: str) -> str:
@@ -127,18 +166,45 @@ class GigaChat:
                 msgs.append({"role": m["role"], "content": m["content"] or ""})
         return msgs
 
+    def _send(self, body: dict) -> dict:
+        retries = int(os.getenv("GIGACHAT_MAX_RETRIES", "5"))
+        gap = float(os.getenv("GIGACHAT_MIN_INTERVAL", "0.3"))
+        refreshed = False
+        attempt = 0
+        while True:
+            wait = gap - (time.time() - GigaChat._last)
+            if wait > 0:
+                time.sleep(wait)
+            try:
+                url = f"{self.pick_base()}/chat/completions"
+                hdr = {"Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {self._auth()}"}
+                return _post(url, body, hdr, self.ctx)
+            except urllib.error.HTTPError as e:
+                text = e.read().decode(errors="replace")[:500]
+                if e.code == 401 and not refreshed:  # токен истёк — обновить и повторить
+                    self._auth(force=True)
+                    refreshed = True
+                    continue
+                if e.code != 429 and e.code < 500:
+                    raise RuntimeError(f"GigaChat {e.code}: {text}") from e
+                if attempt >= retries:
+                    raise LLMUnavailable(f"GigaChat {e.code}: {text}") from e
+                ra = e.headers.get("Retry-After") if e.headers else None
+                delay = float(ra) if ra and ra.replace(".", "", 1).isdigit() else min(2 ** (attempt + 1), 30)
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+                if attempt >= retries:
+                    raise LLMUnavailable(f"GigaChat недоступен: {getattr(e, 'reason', e)}") from e
+                delay = min(2 ** (attempt + 1), 30)
+            finally:
+                GigaChat._last = time.time()
+            attempt += 1
+            time.sleep(delay)
+
     def complete(self, messages: list[dict], tools: list[dict]) -> dict:
         body = {"model": self.model, "messages": self._messages(messages), "temperature": 0.2, "function_call": "auto",
                 "functions": [{"name": t["name"], "description": t["description"], "parameters": t["parameters"]} for t in tools]}
-        url = f"{self.base}/chat/completions"
-        hdr = lambda: {"Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {self._auth()}"}
-        try:
-            r = _post(url, body, hdr(), self.ctx)
-        except urllib.error.HTTPError as e:
-            if e.code != 401:
-                raise RuntimeError(f"GigaChat {e.code}: {e.read().decode(errors='replace')[:500]}") from e
-            self._auth(force=True)  # токен истёк — обновить и повторить один раз
-            r = _post(url, body, hdr(), self.ctx)
+        with GigaChat._lock:
+            r = self._send(body)
         msg = r["choices"][0]["message"]
         fc = msg.get("function_call")
         calls = []

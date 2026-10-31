@@ -27,8 +27,11 @@ print(f"1. Токен ({m.scope}) … ", end="", flush=True)
 token = m._auth()
 print("ok")
 
-print("2. Модели … ", end="", flush=True)
-req = urllib.request.Request(f"{m.base}/models", headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+print("2. Адрес API … ", end="", flush=True)
+base = m.pick_base()
+print(base)
+print("   Модели … ", end="", flush=True)
+req = urllib.request.Request(f"{base}/models", headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
 with urllib.request.urlopen(req, timeout=30, context=m.ctx) as r:
     names = [x["id"] for x in json.loads(r.read()).get("data", [])]
 print(", ".join(names))

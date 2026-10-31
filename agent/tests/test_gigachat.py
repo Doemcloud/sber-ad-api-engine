@@ -6,6 +6,7 @@ import base64
 import json
 import os
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
@@ -20,6 +21,9 @@ KEY = base64.b64encode(f"{CID}:{SECRET}".encode()).decode()
 class Fake(BaseHTTPRequestHandler):
     tokens_issued = 0
     expire_next = False
+    busy_next = 0          # сколько следующих запросов получат 429
+    in_flight = 0          # одновременных запросов к /chat/completions (у физлица лимит — 1)
+    max_in_flight = 0
     requests: list = []
 
     def log_message(self, *a):
@@ -41,25 +45,42 @@ class Fake(BaseHTTPRequestHandler):
             Fake.tokens_issued += 1
             return self._send(200, {"access_token": f"tok{Fake.tokens_issued}", "expires_at": 4102444800000})
         if self.path == "/v1/chat/completions":
-            if self.headers["Authorization"] != f"Bearer tok{Fake.tokens_issued}" or Fake.expire_next:
-                Fake.expire_next = False
-                return self._send(401, {"message": "Token has expired"})
-            body = json.loads(raw)
-            Fake.requests.append(body)
-            assert body["model"] == "GigaChat-3-Ultra"
-            assert body["function_call"] == "auto" and body["functions"]
-            msgs = body["messages"]
-            for i, m in enumerate(msgs):
-                if m["role"] == "function":
-                    assert isinstance(json.loads(m["content"]), dict), "результат функции должен быть JSON-объектом"
-                    assert msgs[i - 1].get("function_call", {}).get("name") == m["name"]
-            if msgs[-1]["role"] == "user":
-                return self._send(200, {"choices": [{"finish_reason": "function_call", "message": {
-                    "role": "assistant", "content": "", "functions_state_id": "st-1",
-                    "function_call": {"name": "get_places", "arguments": {}}}}]})
-            assert msgs[-2].get("functions_state_id") == "st-1"
-            return self._send(200, {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Готово"}}]})
+            Fake.in_flight += 1
+            Fake.max_in_flight = max(Fake.max_in_flight, Fake.in_flight)
+            try:
+                time.sleep(0.05)
+                return self._chat(raw)
+            finally:
+                Fake.in_flight -= 1
         self._send(404, {})
+
+    def _chat(self, raw):
+        if Fake.busy_next:
+            Fake.busy_next -= 1
+            self.send_response(429)
+            self.send_header("Retry-After", "0.1")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":429,"message":"Too Many Requests"}')
+            return
+        if self.headers["Authorization"] != f"Bearer tok{Fake.tokens_issued}" or Fake.expire_next:
+            Fake.expire_next = False
+            return self._send(401, {"message": "Token has expired"})
+        body = json.loads(raw)
+        Fake.requests.append(body)
+        assert body["model"] == "GigaChat-3-Ultra"
+        assert body["function_call"] == "auto" and body["functions"]
+        msgs = body["messages"]
+        for i, m in enumerate(msgs):
+            if m["role"] == "function":
+                assert isinstance(json.loads(m["content"]), dict), "результат функции должен быть JSON-объектом"
+                assert msgs[i - 1].get("function_call", {}).get("name") == m["name"]
+        if msgs[-1]["role"] == "user":
+            return self._send(200, {"choices": [{"finish_reason": "function_call", "message": {
+                "role": "assistant", "content": "", "functions_state_id": "st-1",
+                "function_call": {"name": "get_places", "arguments": {}}}}]})
+        assert msgs[-2].get("functions_state_id") == "st-1"
+        return self._send(200, {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Готово"}}]})
 
 
 class GigaChatAdapter(unittest.TestCase):
@@ -68,7 +89,7 @@ class GigaChatAdapter(unittest.TestCase):
         cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         port = cls.srv.server_address[1]
-        cls.env = {"LLM_PROVIDER": "gigachat", "GIGACHAT_CLIENT_ID": CID, "GIGACHAT_CLIENT_SECRET": SECRET,
+        cls.env = {"GIGACHAT_MIN_INTERVAL": "0", "LLM_PROVIDER": "gigachat", "GIGACHAT_CLIENT_ID": CID, "GIGACHAT_CLIENT_SECRET": SECRET,
                    "GIGACHAT_OAUTH_URL": f"http://127.0.0.1:{port}/oauth", "GIGACHAT_BASE_URL": f"http://127.0.0.1:{port}/v1"}
         cls.saved = {k: os.environ.get(k) for k in list(cls.env) + ["GIGACHAT_AUTH_KEY", "LLM_MODEL"]}
         os.environ.update(cls.env)
@@ -86,6 +107,7 @@ class GigaChatAdapter(unittest.TestCase):
 
     def test_round_trip_with_function_call_and_token_refresh(self):
         model = llm.from_env()
+        before = Fake.tokens_issued
         self.assertIsInstance(model, llm.GigaChat)
         self.assertEqual(model.auth_key, KEY)  # ключ собран из client id + secret
         tools = [{"name": "get_places", "description": "Места размещения", "parameters": {"type": "object", "properties": {}}}]
@@ -99,7 +121,35 @@ class GigaChatAdapter(unittest.TestCase):
         Fake.expire_next = True  # следующий запрос получит 401 — адаптер обязан обновить токен
         r2 = model.complete(history, tools)
         self.assertEqual(r2["content"], "Готово")
-        self.assertEqual(Fake.tokens_issued, 2)
+        self.assertEqual(Fake.tokens_issued - before, 2)  # первый токен + обновление после 401
+
+    def test_429_is_retried_and_requests_are_serialized(self):
+        model = llm.from_env()
+        tools = [{"name": "get_places", "description": "Места", "parameters": {"type": "object", "properties": {}}}]
+        hist = [{"role": "user", "content": "Места?"}]
+        Fake.busy_next = 2
+        self.assertEqual(model.complete(hist, tools)["tool_calls"][0]["name"], "get_places")  # два 429 → успех
+        Fake.max_in_flight = 0
+        out = []
+        ts = [threading.Thread(target=lambda: out.append(llm.from_env().complete(hist, tools))) for _ in range(4)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        self.assertEqual(len(out), 4)
+        self.assertEqual(Fake.max_in_flight, 1, "к GigaChat одновременно ушло больше одного запроса")
+
+    def test_agent_answers_instead_of_crashing_when_model_busy(self):
+        from app.agent import Agent
+        from app.api_client import ApiClient
+
+        class Busy:
+            def complete(self, messages, tools):
+                raise llm.LLMUnavailable('GigaChat 429: {"status":429,"message":"Too Many Requests"}')
+
+        a = Agent(ApiClient("http://127.0.0.1:9"), Busy())
+        st = a.chat(None, "Привет")
+        self.assertIn("перегружен", st["reply"])
+        st = a.chat(st["session_id"], "Ещё раз")  # история не сломана: user → assistant → user
+        self.assertIn("перегружен", st["reply"])
 
     def test_clip_json_always_valid(self):
         big = [{"id": i, "text": "x" * 200} for i in range(500)]
