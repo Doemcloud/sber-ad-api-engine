@@ -34,7 +34,7 @@ cd web   && npm install && npm run dev
 
 ```bash
 cd api   && go test ./...                                   # жизненный цикл, роли, валидации, сверка с моками
-cd agent && python -m unittest discover -s tests -t .      # валидаторы, GigaChat, картинки + 8 сквозных сценариев на живом API
+cd agent && python -m unittest discover -s tests -t .      # валидаторы, GigaChat, картинки + 7 сквозных сценариев на живом API
 python scripts/tz_check.py http://localhost:8080             # 116 проверок API по пунктам ТЗ (на чистых данных, AUTH_REQUIRED=0)
 ```
 
