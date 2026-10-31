@@ -551,13 +551,6 @@ input:-webkit-autofill { -webkit-text-fill-color: var(--ink); -webkit-box-shadow
 :root[data-theme="dark"] .secondary-button { color: var(--ok-ink); }
 
 /* баланс */
-.balance-card { color: #fff; border: 0; background: radial-gradient(circle at 100% 0%, rgba(33, 161, 154, .25), transparent 38%), linear-gradient(145deg, #008a45, #21a038); }
-.balance-card .card-header p { color: rgba(255, 255, 255, .75); }
-.balance-value { margin: 6px 0 6px; font-size: 34px; font-weight: 800; letter-spacing: -.04em; }
-.balance-label { color: rgba(255, 255, 255, .8); font-size: 13px; }
-.balance-progress { height: 8px; margin-top: 22px; overflow: hidden; border-radius: 10px; background: rgba(255, 255, 255, .23); }
-.balance-progress span { display: block; height: 100%; border-radius: inherit; background: #fff; transition: width .5s ease; }
-.balance-caption { display: flex; justify-content: space-between; margin-top: 8px; color: rgba(255, 255, 255, .78); font-size: 11px; }
 .summary-card h2 { font-size: 19px; margin-bottom: 10px; }
 .summary-row { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 11px 4px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--ink); }
 .summary-row b { font-size: 18px; }

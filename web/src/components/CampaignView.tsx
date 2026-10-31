@@ -5,6 +5,9 @@ import { AUDIT_ACTION_RU, CHANNEL_RU, ENTITY_RU, FIELD_RU, FORMAT_RU, STATE_RU, 
 import type { ApiErrorItem, AuditEntry, CampaignDetails, Dicts, Validation } from "../types";
 import { BannerPreview, Phone, PromoPreview } from "./Previews";
 
+// Служебные поля шапки, которые в кабинете не показываются (очерёдность показа решает система банка).
+const HIDDEN_FIELDS = new Set(["weight", "initialCtr"]);
+
 /** Подписи статусов (оставлено для совместимости импорта). */
 export const STATE_LABEL = STATE_RU;
 
@@ -120,7 +123,7 @@ export default function CampaignView({ campaign: c, dicts, validation, refreshKe
             <li key={a.id}>
               <span className="muted">{fmtDateTime(a.at)}</span> <b>{person(a.actor)}</b> — {ENTITY_RU[a.entity] ?? a.entity}: {AUDIT_ACTION_RU[a.action] ?? a.action}
               {a.comment && <div className="comment">«{a.comment}»</div>}
-              {a.changes && Object.keys(a.changes).length > 0 && <div className="muted small">изменено: {Object.keys(a.changes).map((k) => FIELD_RU[k] ?? k).join(", ")}</div>}
+              {a.changes && Object.keys(a.changes).some((k) => !HIDDEN_FIELDS.has(k)) && <div className="muted small">изменено: {Object.keys(a.changes).filter((k) => !HIDDEN_FIELDS.has(k)).map((k) => FIELD_RU[k] ?? k).join(", ")}</div>}
             </li>
           ))}
         </ol>

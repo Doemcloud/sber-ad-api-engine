@@ -55,7 +55,6 @@ CAMPAIGN = {
         "tags": {"type": "array", "items": INT, "description": "id тегов из get_tags или \"$ref\" нового тега"},
         "keywords": {"type": "string", "description": "через ;"},
         "audienceType": {"type": "string", "enum": ["ALL_USERS", "SEGMENTED"]},
-        "weight": {"type": "number", "description": "не заполнять: в продукте не используется, бэкенд ставит 0"},
         "initialCtr": {"type": "number", "description": "по умолчанию 15"},
         "places": {"type": "array", "items": INT, "description": "id мест показа из get_places или \"$ref\" нового места"},
     },

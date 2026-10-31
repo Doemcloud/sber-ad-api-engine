@@ -44,7 +44,7 @@ export const AUDIT_ACTION_RU: Record<string, string> = {
 export const FIELD_RU: Record<string, string> = {
   name: "название", marketingName: "рекламное название", startDate: "дата старта", startTime: "время старта",
   endDate: "дата окончания", endTime: "время окончания", topic: "тематика", tags: "теги", keywords: "ключевые слова",
-  audienceType: "тип аудитории", weight: "приоритет показа", initialCtr: "прогнозный CTR", places: "места размещения",
+  audienceType: "тип аудитории", places: "места размещения",
   included: "таргетинг", excluded: "исключения", content: "содержание", bannerTypeId: "формат", channelCode: "платформа",
   bannerId: "баннер", contentId: "промо-экран",
 };

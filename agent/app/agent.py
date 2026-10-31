@@ -326,6 +326,7 @@ class Agent:
 
         if name in ("create_campaign", "update_campaign"):
             c = a.get("campaign") or {}
+            c.pop("weight", None)  # служебное поле: модель его не задаёт, сохраняется прежнее значение
             for k in ("tags", "places"):
                 if k in c:
                     c[k] = [self._norm_id(s, v) for v in c[k] or []]

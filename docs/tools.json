@@ -420,10 +420,6 @@
                 "SEGMENTED"
               ]
             },
-            "weight": {
-              "type": "number",
-              "description": "не заполнять: в продукте не используется, бэкенд ставит 0"
-            },
             "initialCtr": {
               "type": "number",
               "description": "по умолчанию 15"
@@ -508,10 +504,6 @@
                 "ALL_USERS",
                 "SEGMENTED"
               ]
-            },
-            "weight": {
-              "type": "number",
-              "description": "не заполнять: в продукте не используется, бэкенд ставит 0"
             },
             "initialCtr": {
               "type": "number",

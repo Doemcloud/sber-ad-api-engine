@@ -3,11 +3,12 @@ import { api } from "../api";
 import { describe, when, type FeedEntry } from "../events";
 import type { CampaignListItem, CampaignStats } from "../types";
 
-// «Главная» менеджера: сравнение запущенных кампаний, события, история изменений, баланс показов.
+// «Главная» менеджера: сравнение запущенных кампаний, события, история изменений.
 type Metric = "reach" | "impressions" | "clicks";
 const METRIC: Record<Metric, string> = { reach: "По количеству просмотров", impressions: "Показы", clicks: "Клики" };
-const QUOTA = 150_000_000; // демо: выделено показов на месяц для кабинета
-const IMPORTANT = new Set(["DECLINE", "APPROVE", "ACTIVATE", "TO_MODERATION", "STOP", "RESUME_REQUEST"]);
+// «События» клиента — то, что произошло с его кампаниями: решения модератора, запуск, остановка.
+// Заявки на модерацию и запросы возобновления — события модератора, здесь их нет.
+const CLIENT_EVENTS = new Set(["DECLINE", "APPROVE", "ACTIVATE", "STOP"]);
 
 const fmt = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const compact = (n: number) =>
@@ -24,7 +25,6 @@ interface Props {
 export default function HomePage({ feed, onOpenCampaign, onNavigate, children }: Props) {
   const [list, setList] = useState<CampaignListItem[]>([]);
   const [stats, setStats] = useState<Record<number, CampaignStats>>({});
-  const [month, setMonth] = useState<Record<number, CampaignStats>>({});
   const [metric, setMetric] = useState<Metric>("reach");
   const [filter, setFilter] = useState<"all" | "active">("all");
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +33,8 @@ export default function HomePage({ feed, onOpenCampaign, onNavigate, children }:
     api.campaigns().then(async (xs) => {
       setList(xs);
       const launched = xs.filter((c) => c.published || c.state === "STOPPED");
-      const [all, m] = await Promise.all([
-        Promise.all(launched.map((c) => api.stats(c.id, "all").catch(() => null))),
-        Promise.all(launched.filter((c) => c.published).map((c) => api.stats(c.id, "month").catch(() => null))),
-      ]);
+      const all = await Promise.all(launched.map((c) => api.stats(c.id, "all").catch(() => null)));
       setStats(Object.fromEntries(all.filter(Boolean).map((s) => [s!.campaignId, s!])));
-      setMonth(Object.fromEntries(m.filter(Boolean).map((s) => [s!.campaignId, s!])));
     }).catch((e: Error) => setError(e.message));
   }, []);
 
@@ -48,11 +44,7 @@ export default function HomePage({ feed, onOpenCampaign, onNavigate, children }:
     .sort((a, b) => b.value - a.value), [list, stats, metric, filter]);
   const max = Math.max(...bars.map((b) => b.value), 1);
 
-  const used = Object.values(month).reduce((s, x) => s + x.impressions, 0);
-  const left = Math.max(QUOTA - used, 0);
-  const pct = Math.min(100, Math.round((used / QUOTA) * 100));
-
-  const events = feed.filter((e) => IMPORTANT.has(e.action)).slice(0, 5);
+  const events = feed.filter((e) => CLIENT_EVENTS.has(e.action)).slice(0, 5);
   const history = feed.slice(0, 7);
   const counts = {
     live: list.filter((c) => c.published).length,
@@ -64,7 +56,7 @@ export default function HomePage({ feed, onOpenCampaign, onNavigate, children }:
     <div className="page home">
       <section className="page-heading">
         <h1>Главная</h1>
-        <p>Контроль рекламных кампаний и выделенных показов</p>
+        <p>Контроль рекламных кампаний</p>
       </section>
       {error && <div className="toast err">{error}</div>}
 
@@ -105,7 +97,7 @@ export default function HomePage({ feed, onOpenCampaign, onNavigate, children }:
           </section>
 
           <section className="card">
-            <div className="card-header"><div><h2>События</h2><p>Последние изменения и уведомления</p></div></div>
+            <div className="card-header"><div><h2>События</h2><p>Решения модератора, запуски и остановки ваших кампаний</p></div></div>
             <div className="event-list">
               {events.length === 0 && <div className="statistics-empty">Событий пока нет</div>}
               {events.map((e) => {
@@ -139,13 +131,6 @@ export default function HomePage({ feed, onOpenCampaign, onNavigate, children }:
         </div>
 
         <aside className="side-column">
-          <section className="card balance-card">
-            <div className="card-header"><div><h2>Баланс показов</h2><p>Выделено на рекламные кампании в этом месяце</p></div></div>
-            <div className="balance-value">{compact(left)}</div>
-            <div className="balance-label">доступных показов</div>
-            <div className="balance-progress"><span style={{ width: `${pct}%` }} /></div>
-            <div className="balance-caption"><span>Использовано {compact(used)}</span><span>{pct}%</span></div>
-          </section>
           <section className="card summary-card">
             <h2>Кампании</h2>
             <button className="summary-row" onClick={() => onNavigate("campaigns")}><span>Показы идут</span><b>{counts.live}</b></button>
