@@ -4,6 +4,8 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,6 +18,7 @@ import (
 
 	"adcamp/internal/auth"
 	"adcamp/internal/domain"
+	"adcamp/internal/media"
 	"adcamp/internal/service"
 )
 
@@ -28,6 +31,8 @@ type API struct {
 	Auth       *auth.Auth
 	Required   bool
 	ServiceKey string
+	Media      media.Store     // изображения креативов; nil — загрузка недоступна
+	PublicURL  string          // публичный адрес API для ссылок на изображения
 	Origins    map[string]bool // разрешённые источники CORS; пусто — любой (режим разработки)
 
 	loginMu   sync.Mutex
@@ -70,7 +75,9 @@ func (a *API) allowLogin(r *http.Request) bool {
 
 func (a *API) Routes() http.Handler {
 	m := http.NewServeMux()
-	m.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	m.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, map[string]string{"status": "ok", "mediaBase": a.PublicURL})
+	})
 	m.HandleFunc("POST /auth/login", a.login)
 	m.HandleFunc("GET /auth/me", a.me)
 
@@ -167,7 +174,80 @@ func (a *API) Routes() http.Handler {
 		return a.S.CBROExport(int64(v)), nil
 	}, 200))
 
+	m.HandleFunc("POST /media", a.uploadMedia)
+	m.HandleFunc("GET /media/{mid}", a.getMedia)
+
 	return a.withHeaders(m)
+}
+
+// uploadMedia: тело — сами байты изображения (JPEG/PNG/WebP до 8 МБ), ?prompt= — описание.
+// Загружать может менеджер кампаний (агент — от его имени) или сервис по ключу.
+func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request) {
+	if a.Media == nil {
+		authError(w, 503, "MEDIA_UNAVAILABLE", "Хранилище изображений не настроено")
+		return
+	}
+	if r.Header.Get("X-Role") != "campaignManager" && !a.trustedService(r) {
+		authError(w, 403, "ROLE_FORBIDDEN", "Загружать изображения может только менеджер кампаний")
+		return
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, media.MaxSize+1))
+	if err != nil {
+		authError(w, 413, "MEDIA_TOO_LARGE", media.ErrSize.Error())
+		return
+	}
+	author := r.Header.Get("X-User")
+	if author == "" {
+		author = "service"
+	}
+	id, err := a.Media.Put(media.Image{Data: data, Prompt: r.URL.Query().Get("prompt"), Author: author})
+	switch {
+	case errors.Is(err, media.ErrType):
+		authError(w, 415, "MEDIA_TYPE_INVALID", err.Error())
+		return
+	case errors.Is(err, media.ErrSize):
+		authError(w, 413, "MEDIA_TOO_LARGE", err.Error())
+		return
+	case err != nil:
+		log.Printf("media put: %v", err)
+		authError(w, 500, "MEDIA_SAVE_FAILED", "Не удалось сохранить изображение")
+		return
+	}
+	writeJSON(w, 201, map[string]string{"id": id, "url": a.mediaURL(r, id)})
+}
+
+func (a *API) mediaURL(r *http.Request, id string) string {
+	base := a.PublicURL
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	return base + "/media/" + id
+}
+
+// getMedia — публично (картинку грузит <img> в приложении и в превью), id — неугадываемый UUID.
+func (a *API) getMedia(w http.ResponseWriter, r *http.Request) {
+	if a.Media == nil {
+		http.NotFound(w, r)
+		return
+	}
+	img, err := a.Media.Get(r.PathValue("mid"))
+	if err != nil {
+		if !errors.Is(err, media.ErrNotFound) {
+			log.Printf("media get: %v", err)
+		}
+		http.NotFound(w, r)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", img.Mime)
+	h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
+	_, _ = w.Write(img.Data)
 }
 
 func authError(w http.ResponseWriter, code int, c, msg string) {
@@ -294,7 +374,9 @@ func (a *API) withHeaders(h http.Handler) http.Handler {
 			w.WriteHeader(204)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/auth/") && r.URL.Path != "/health" {
+		public := strings.HasPrefix(r.URL.Path, "/auth/") || r.URL.Path == "/health" ||
+			(r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/media/"))
+		if !public {
 			if tok := bearer(r); tok != "" && a.Auth != nil {
 				u, err := a.Auth.Verify(tok)
 				if err != nil {

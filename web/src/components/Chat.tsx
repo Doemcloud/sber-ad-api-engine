@@ -3,8 +3,11 @@ import type { ChatItem, Dicts, HistoryItem, PendingAction } from "../types";
 import { fmtReach } from "../ru";
 import { IconBot, IconHistory, IconPlus, IconSend, IconTrash } from "./Icons";
 import PlanCard from "./PlanCard";
+import { Img } from "./Previews";
 import { humanize, person } from "../ru";
 import { plural } from "../checklist";
+
+const IMAGE_FOR: Record<string, string> = { STORY: "сторис", SMART_BANNER: "смарт-баннера", PROMO: "промо-экрана" };
 
 interface Props {
   items: ChatItem[];
@@ -141,6 +144,19 @@ export default function Chat(props: Props) {
                     </div>
                   ))}
                 </div>
+              );
+            }
+            if (m.kind === "image") {
+              const target = IMAGE_FOR[m.format ?? ""] ?? "креатива";
+              return (
+                <figure key={i} className={`gen-image gen-${(m.format ?? "").toLowerCase()}`}>
+                  <a href={m.url} target="_blank" rel="noopener noreferrer" title="Открыть в полном размере"><Img src={m.url} className="gen-image-pic" /></a>
+                  <figcaption>
+                    <b>✦ Изображение для {target}</b>
+                    {m.prompt && <span>{m.prompt}</span>}
+                    <button className="quick-btn" disabled={busy} onClick={() => onSend(`Нарисуй другой вариант изображения для ${target}`)}>Другой вариант</button>
+                  </figcaption>
+                </figure>
               );
             }
             return <div key={i} className={`msg ${m.kind}`}>{m.kind === "assistant" ? humanize(m.text, dicts) : m.text}</div>;

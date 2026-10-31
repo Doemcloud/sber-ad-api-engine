@@ -146,8 +146,11 @@ export interface AgentState {
 
 // Лента диалога, которую хранит агент (для истории и восстановления после перезагрузки).
 export interface TranscriptItem {
-  kind: "user" | "assistant" | "result";
+  kind: "user" | "assistant" | "result" | "image";
   text?: string;
+  url?: string;                    // image: сгенерированное изображение креатива
+  prompt?: string;
+  format?: "STORY" | "SMART_BANNER" | "PROMO";
   results?: StepResult[];
   rejected?: string;
   at: string;
@@ -166,8 +169,11 @@ export interface HistoryItem {
 }
 
 export interface ChatItem {
-  kind: "user" | "assistant" | "result";
+  kind: "user" | "assistant" | "result" | "image";
   text?: string;
+  url?: string;
+  prompt?: string;
+  format?: "STORY" | "SMART_BANNER" | "PROMO";
   results?: StepResult[];
   rejected?: string;
 }

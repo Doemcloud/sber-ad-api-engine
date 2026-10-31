@@ -29,11 +29,15 @@ class LLM(Protocol):
     def complete(self, messages: list[dict], tools: list[dict]) -> dict: ...
 
 
-def _post(url: str, body: dict | str, headers: dict, ctx: ssl.SSLContext | None = None, timeout: float = 120) -> dict:
-    data = body.encode() if isinstance(body, str) else json.dumps(body, ensure_ascii=False).encode()
-    req = urllib.request.Request(url, data=data, method="POST", headers=headers)
+def _http(url: str, method: str, body: dict | str | None, headers: dict, ctx: ssl.SSLContext | None = None, timeout: float = 120) -> bytes:
+    data = None if body is None else body.encode() if isinstance(body, str) else json.dumps(body, ensure_ascii=False).encode()
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-        return json.loads(r.read())
+        return r.read()
+
+
+def _post(url: str, body: dict | str, headers: dict, ctx: ssl.SSLContext | None = None, timeout: float = 120) -> dict:
+    return json.loads(_http(url, "POST", body, headers, ctx, timeout))
 
 
 class OpenAICompatible:
@@ -166,7 +170,8 @@ class GigaChat:
                 msgs.append({"role": m["role"], "content": m["content"] or ""})
         return msgs
 
-    def _send(self, body: dict) -> dict:
+    def _send(self, body: dict | None, path: str = "/chat/completions", method: str = "POST", accept: str = "application/json"):
+        """Запрос к API GigaChat с повторами; JSON-ответ — словарь, иначе — байты (файлы)."""
         retries = int(os.getenv("GIGACHAT_MAX_RETRIES", "5"))
         gap = float(os.getenv("GIGACHAT_MIN_INTERVAL", "0.3"))
         refreshed = False
@@ -176,9 +181,11 @@ class GigaChat:
             if wait > 0:
                 time.sleep(wait)
             try:
-                url = f"{self.pick_base()}/chat/completions"
-                hdr = {"Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {self._auth()}"}
-                return _post(url, body, hdr, self.ctx)
+                hdr = {"Accept": accept, "Authorization": f"Bearer {self._auth()}"}
+                if body is not None:
+                    hdr["Content-Type"] = "application/json"
+                raw = _http(f"{self.pick_base()}{path}", method, body, hdr, self.ctx)
+                return json.loads(raw) if accept == "application/json" else raw
             except urllib.error.HTTPError as e:
                 text = e.read().decode(errors="replace")[:500]
                 if e.code == 401 and not refreshed:  # токен истёк — обновить и повторить

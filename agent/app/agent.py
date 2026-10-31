@@ -15,6 +15,7 @@ import json
 import os
 import re
 import threading
+import urllib.parse
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
@@ -25,11 +26,13 @@ from .api_client import ApiClient, ApiError
 from .explain import explain
 from .compliance import check_creative, check_message
 from .hints import extract_choices, next_steps, recommendations
+from .images import ImageGen, ImageUnavailable, build_prompt, from_env as images_from_env
 from .llm import LLM
 from .tools import TOOLS, schemas
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "system.md"
-MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "30"))  # GigaChat вызывает по одной функции за ответ
+MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "30"))
+MAX_IMAGES = int(os.getenv("IMAGES_PER_SESSION", "12"))  # защита от бесконечной перегенерации  # GigaChat вызывает по одной функции за ответ
 FORMAT_RU = {"STORY": "сторис", "SMART_BANNER": "смарт-баннер"}
 CHANNEL_RU = {"iOS": "iOS", "ANDROID": "Android", "WEB": "веб-версия"}
 HEADER_KEYS = ["name", "marketingName", "startDate", "startTime", "endDate", "endTime", "topic", "tags",
@@ -130,8 +133,10 @@ def load_sessions() -> int:
 
 
 class Agent:
-    def __init__(self, api: ApiClient, llm: LLM, prompt_path: Path = PROMPT_PATH):
+    def __init__(self, api: ApiClient, llm: LLM, prompt_path: Path = PROMPT_PATH, images: ImageGen | None = None):
         self.api, self.llm = api, llm
+        self.images = images or images_from_env()
+        self._media_base: str | None = None
         self.prompt = prompt_path.read_text(encoding="utf-8")
         turn = prompt_path.parent / "turn.md"
         # Служебная памятка, которая уходит модели вместе с каждым сообщением менеджера.
@@ -264,7 +269,10 @@ class Agent:
                     s.campaign_id = int(args["campaign_id"])
                 return self.api.get(fill_path(path, args), user=s.user, role=s.role)
             if kind == "local":
+                self.trust_media()
                 return self._local(name, args)
+            if kind == "image":
+                return self._image(s, args)
             return self._propose(s, name, args)
         except ApiError as e:
             return {"ok": False, "status": e.status, "errors": explain(e.errors)}
@@ -311,8 +319,49 @@ class Agent:
         det = self.api.get(f"/campaigns/{cid}", user=s.user, role=s.role)
         return {k: det.get(k) for k in HEADER_KEYS if det.get(k) is not None}
 
+    # ---- нейрогенерация изображений
+    def trust_media(self) -> None:
+        """Ссылки на собственное хранилище изображений API принимаются валидатором (адрес — из /health)."""
+        if self._media_base is None:
+            try:
+                base = (self.api.get("/health") or {}).get("mediaBase") or ""
+            except ApiError:
+                return  # API недоступен — спросим в следующий раз
+            self._media_base = base.rstrip("/")
+            if self._media_base:
+                V.TRUSTED_MEDIA.add(self._media_base + "/media/")
+
+    def _image(self, s: Session, a: dict):
+        if s.role != "campaignManager":
+            return {"ok": False, "errors": explain([{"code": "ROLE_FORBIDDEN", "message": "изображения для креативов создаёт менеджер кампаний"}])}
+        prompt = str(a.get("prompt") or "").strip()
+        fmt = a.get("format") if a.get("format") in ("STORY", "SMART_BANNER", "PROMO") else "SMART_BANNER"
+        if not 5 <= len(prompt) <= 800:
+            return {"ok": False, "errors": [{"code": "IMAGE_PROMPT_INVALID", "message": "опиши сцену в 1–3 предложениях (до 800 символов)"}]}
+        block = check_message(prompt)
+        if block:  # стоп-темы закона о рекламе действуют и для картинок
+            self.log(s, "compliance_refusal", block["id"])
+            return {"ok": False, "errors": [{"code": "IMAGE_FORBIDDEN_TOPIC", "message": block["reply"]}]}
+        if sum(1 for t in s.transcript if t.get("kind") == "image") >= MAX_IMAGES:
+            return {"ok": False, "errors": [{"code": "IMAGE_LIMIT", "message": f"в одном диалоге — не больше {MAX_IMAGES} изображений; используй уже созданные"}]}
+        self.log(s, "image_generate", {"prompt": prompt, "format": fmt, "provider": self.images.name})
+        try:
+            data, mime = self.images.generate(build_prompt(prompt, fmt, a.get("background_color")), fmt)
+            res = self.api.upload("/media?prompt=" + urllib.parse.quote(prompt[:300]), data, mime, user=s.user, role=s.role)
+        except ImageUnavailable as e:
+            return {"ok": False, "errors": [{"code": "IMAGE_GENERATION_FAILED", "message": f"изображение не создано: {e}. Продолжай без картинки или предложи менеджеру ссылку на свою."}]}
+        except ApiError as e:
+            return {"ok": False, "status": e.status, "errors": explain(e.errors)}
+        url = res["url"]
+        self.trust_media()
+        V.TRUSTED_MEDIA.add(url.rsplit("/media/", 1)[0] + "/media/")
+        self.note(s, {"kind": "image", "url": url, "prompt": prompt, "format": fmt})
+        return {"ok": True, "url": url, "format": fmt,
+                "next": "вставь url в content.image.url баннера или в компонент PROMO {role: image, url, aspectRatio}"}
+
     def _propose(self, s: Session, name: str, a: dict):
         a = copy.deepcopy(a)
+        self.trust_media()
         role = TOOLS[name][3]
         if role and s.role != role:
             errs = [{"code": "ROLE_FORBIDDEN", "message": f"инструмент {name} доступен роли {role}, текущая роль {s.role}"}]

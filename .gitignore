@@ -10,3 +10,5 @@ certs/*.crt
 certs/*.cer
 certs/*.pem
 agent/state/
+agent/gigachat_check.jp*g
+agent/gigachat_check.png

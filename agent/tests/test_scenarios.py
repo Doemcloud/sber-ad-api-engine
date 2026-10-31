@@ -36,7 +36,7 @@ def setUpModule():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    env = {**os.environ, "PORT": str(port), "MOCK_DIR": str(ROOT / "data" / "mock"), "STATE_FILE": os.path.join(tmp, "state.json")}
+    env = {**os.environ, "PORT": str(port), "MOCK_DIR": str(ROOT / "data" / "mock"), "STATE_FILE": os.path.join(tmp, "state.json"), "MEDIA_DIR": os.path.join(tmp, "media")}
     _proc = subprocess.Popen([binary], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     os.environ["API_URL"] = f"http://127.0.0.1:{port}"
     for _ in range(50):
@@ -97,9 +97,9 @@ class Scenarios(unittest.TestCase):
     def setUp(self):
         agent_mod.SESSIONS.clear()
 
-    def make(self, script):
+    def make(self, script, images=None):
         llm = ScriptedLLM(script)
-        return Agent(ApiClient(), llm), llm
+        return Agent(ApiClient(), llm, images=images), llm
 
     # ---------------- Диалог 1: бриф → кампания → модерация (task.md §9)
     def test_brief_to_moderation(self):
@@ -290,6 +290,49 @@ class Scenarios(unittest.TestCase):
         api.request("POST", "/campaigns/109/approve", {}, user="petrova.m", role="campaignModerator")
         c = api.request("POST", "/campaigns/109/activate", {}, user="ivanov.p", role="campaignManager")
         self.assertEqual((c["state"], c["published"]), ("ACTIVE", True))
+
+
+    # ---------------- Нейрогенерация изображения для баннера
+    def test_generated_image_in_banner(self):
+        from app.images import DemoImages
+
+        def banner_with_image(msgs):
+            url = json.loads([m for m in msgs if m["role"] == "tool"][-1]["content"])["url"]
+            return calls(call("create_banner", campaign_id=101, name="Осенний смарт-баннер", bannerTypeId=2, content={
+                "title": "Кэшбэк в кофейнях", "text": "До 10% осенью", "background": {"color": "#E8FAFFFF"},
+                "image": {"url": url}, "buttonName": "Подробнее", "actionType": "default"}))
+
+        a, llm = self.make([
+            calls(call("generate_image", prompt="Чашка кофе в осеннем парке, тёплый свет", format="SMART_BANNER", background_color="#E8FAFFFF")),
+            banner_with_image,
+            say("Нарисовал картинку и собрал баннер — подтвердите."),
+            calls(call("generate_image", prompt="Фишки и рулетка в казино", format="STORY")),
+            say("Такое изображение сделать не могу."),
+        ], images=DemoImages())
+        st = a.chat(None, "Сделай смарт-баннер с картинкой для 101", user="ivanov.p", role="campaignManager")
+        images = [t for t in st["transcript"] if t["kind"] == "image"]
+        self.assertEqual(len(images), 1, st["transcript"])
+        url = images[0]["url"]
+        self.assertIn("/media/", url)
+        with urllib.request.urlopen(url.replace("localhost", "127.0.0.1"), timeout=5) as r:
+            self.assertEqual(r.headers["Content-Type"], "image/png")
+            self.assertTrue(r.read().startswith(b"\x89PNG"))
+        plan = st["pending_action"]
+        self.assertEqual(plan["steps"][0]["args"]["content"]["image"]["url"], url)
+        st = a.confirm(st["session_id"], plan["id"], True)
+        self.assertTrue(st["last_result"][0]["ok"], st["last_result"])
+        banners = ApiClient().get("/campaigns/101")["banners"]
+        self.assertIn(url, [b["content"].get("image", {}).get("url") for b in banners])
+        # стоп-темы закона о рекламе действуют и для картинок
+        st = a.chat(st["session_id"], "А теперь сторис про казино")
+        self.assertEqual(tool_results(llm)[-1]["errors"][0]["code"], "IMAGE_FORBIDDEN_TOPIC")
+        self.assertEqual(len([t for t in st["transcript"] if t["kind"] == "image"]), 1)
+
+    def test_moderator_cannot_generate_images(self):
+        from app.images import DemoImages
+        a, llm = self.make([calls(call("generate_image", prompt="Осенний парк", format="STORY")), say("Не могу.")], images=DemoImages())
+        a.chat(None, "Нарисуй картинку", user="petrova.m", role="campaignModerator")
+        self.assertEqual(tool_results(llm)[-1]["errors"][0]["code"], "ROLE_FORBIDDEN")
 
 
 if __name__ == "__main__":

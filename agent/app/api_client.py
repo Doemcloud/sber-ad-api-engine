@@ -53,6 +53,30 @@ class ApiClient:
         except urllib.error.URLError as e:
             raise ApiError(503, [{"code": "API_UNAVAILABLE", "message": f"API кампаний недоступен: {e.reason}"}]) from None
 
+    def upload(self, path: str, data: bytes, mime: str, user: str = "", role: str = "") -> dict:
+        """Загрузить изображение (POST /media) от имени вошедшего пользователя."""
+        req = urllib.request.Request(self.base + path, data=data, method="POST", headers={"Content-Type": mime})
+        if user:
+            req.add_header("X-User", user)
+        if role:
+            req.add_header("X-Role", role)
+        token = CURRENT_TOKEN.get()
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        elif self.service_key:
+            req.add_header("X-Service-Key", self.service_key)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            try:
+                errors = json.loads(e.read()).get("errors", [])
+            except Exception:
+                errors = [{"code": "HTTP_ERROR", "message": f"HTTP {e.code}"}]
+            raise ApiError(e.code, errors) from None
+        except urllib.error.URLError as e:
+            raise ApiError(503, [{"code": "API_UNAVAILABLE", "message": f"API кампаний недоступен: {e.reason}"}]) from None
+
     def me(self, token: str) -> dict:
         """Кто вошёл: проверка токена пользователя в API кампаний."""
         req = urllib.request.Request(self.base + "/auth/me", headers={"Authorization": f"Bearer {token}"})

@@ -21,7 +21,14 @@ def err(code: str, field: str, message: str) -> dict:
     return {"code": code, "field": field, "message": message}
 
 
+# Адреса собственного хранилища изображений API ({PUBLIC_URL}/media/): их ссылки принимаются
+# и без https (локальный запуск). Заполняет агент по ответу GET /health.
+TRUSTED_MEDIA: set[str] = set()
+
+
 def _https(v: Any) -> bool:
+    if isinstance(v, str) and any(v.startswith(p) and len(v) > len(p) for p in TRUSTED_MEDIA):
+        return True
     return isinstance(v, str) and v.startswith("https://") and len(v) > len("https://")
 
 

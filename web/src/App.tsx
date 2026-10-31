@@ -28,7 +28,7 @@ const forgetSid = () => { try { localStorage.removeItem(SID_KEY); } catch { /* �
 const GREETING: ChatItem = { kind: "assistant", text: "Расскажите о кампании своими словами: что продвигаем, для кого, где показать и в какие даты. Я подберу аудиторию и места размещения, подготовлю креативы, проверю всё и покажу, как реклама будет выглядеть, — сохраню только после вашего подтверждения." };
 
 const toItems = (t: TranscriptItem[] | undefined): ChatItem[] =>
-  [GREETING, ...(t ?? []).map(({ kind, text, results, rejected }) => ({ kind, text, results, rejected }))];
+  [GREETING, ...(t ?? []).map(({ kind, text, results, rejected, url, prompt, format }) => ({ kind, text, results, rejected, url, prompt, format }))];
 
 // Без входа — страница входа; после входа — кабинет от имени вошедшего (роль берётся из токена).
 export default function App() {

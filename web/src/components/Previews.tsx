@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_URL } from "../api";
 import type { BannerContent, PromoComponent, PromoContent, TextStyle } from "../types";
 
 // Цвет #RRGGBBAA → CSS rgba.
@@ -24,11 +25,14 @@ function safeHtml(text: string): string {
   return esc.replace(/&lt;(\/?)b&gt;/g, "<$1b>");
 }
 
+// Изображения из нашего хранилища (нейрогенерация) — {API}/media/{id}; локально они бывают и по http.
+export const isOwnMedia = (src?: string) => !!src && src.startsWith(`${API_URL}/media/`);
+
 // Картинки из моков на домене .example не резолвятся — показываем подложку.
-function Img({ src, className, style }: { src?: string; className?: string; style?: React.CSSProperties }) {
+export function Img({ src, className, style }: { src?: string; className?: string; style?: React.CSSProperties }) {
   const [broken, setBroken] = useState(false);
-  // только https: никаких javascript:/data:/http-ссылок из текста креатива
-  if (!src || broken || !/^https:\/\//i.test(src)) return <div className={`img-fallback ${className ?? ""}`} style={style} aria-label="изображение" />;
+  // только https или своё хранилище: никаких javascript:/data:/чужих http-ссылок из текста креатива
+  if (!src || broken || !(/^https:\/\//i.test(src) || isOwnMedia(src))) return <div className={`img-fallback ${className ?? ""}`} style={style} aria-label="изображение" />;
   return <img className={className} style={style} src={src} alt="" onError={() => setBroken(true)} />;
 }
 

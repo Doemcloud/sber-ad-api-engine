@@ -433,3 +433,11 @@ func DescribeDSN(dsn string) string {
 	}
 	return dsn
 }
+
+// DB — соединение с PostgreSQL (nil в режиме без СУБД); нужно хранилищу изображений.
+func (s *Store) DB() *sql.DB {
+	if s.pg == nil {
+		return nil
+	}
+	return s.pg.db
+}

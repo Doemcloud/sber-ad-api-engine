@@ -13,6 +13,7 @@ import (
 	"adcamp/internal/auth"
 	"adcamp/internal/domain"
 	"adcamp/internal/httpapi"
+	"adcamp/internal/media"
 	"adcamp/internal/service"
 	"adcamp/internal/store"
 )
@@ -73,7 +74,16 @@ func main() {
 			origins[o] = true
 		}
 	}
-	api := &httpapi.API{S: service.New(st), Auth: au, Required: env("AUTH_REQUIRED", "0") == "1", ServiceKey: os.Getenv("SERVICE_KEY"), Origins: origins}
+	// Изображения креативов: в PostgreSQL, если он подключён, иначе — каталог на диске.
+	var ms media.Store = media.Dir{Path: env("MEDIA_DIR", "./state/media")}
+	if db := st.DB(); db != nil {
+		ms = media.PG{DB: db}
+	}
+	// Публичный адрес API: по нему браузер и приложение загружают изображения (/media/{id}).
+	publicURL := strings.TrimRight(env("PUBLIC_URL", "http://localhost:"+env("PORT", "8080")), "/")
+	domain.MediaBase = publicURL
+	api := &httpapi.API{S: service.New(st), Auth: au, Required: env("AUTH_REQUIRED", "0") == "1", ServiceKey: os.Getenv("SERVICE_KEY"), Origins: origins,
+		Media: ms, PublicURL: publicURL}
 	log.Printf("вход по логину: обязателен=%v; CORS: %d источник(ов)", api.Required, len(origins))
 	srv := &http.Server{Addr: addr, Handler: api.Routes(),
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 64 << 10}

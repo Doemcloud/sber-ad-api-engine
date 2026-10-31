@@ -478,7 +478,14 @@ func isColor(v any) bool {
 	return ok && reColor.MatchString(s)
 }
 
+// MediaBase — публичный адрес API ({PUBLIC_URL}); ссылки на собственные изображения
+// ({MediaBase}/media/{id}) принимаются и без https — например, при локальном запуске.
+var MediaBase string
+
 func isHTTPS(v any) bool {
 	s, ok := v.(string)
+	if ok && MediaBase != "" && strings.HasPrefix(s, MediaBase+"/media/") && len(s) > len(MediaBase+"/media/") {
+		return true
+	}
 	return ok && strings.HasPrefix(s, "https://") && len(s) > len("https://")
 }

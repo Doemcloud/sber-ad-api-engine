@@ -1,6 +1,7 @@
 """Живая проверка GigaChat: ключ → токен → список моделей → вызов функции.
 Запуск из папки agent (переменные берутся из ../.env или окружения):
-    python gigachat_check.py
+    python gigachat_check.py            # чат и вызов функции
+    python gigachat_check.py --image    # плюс нейрогенерация картинки (сохранится в gigachat_check.jpg)
 """
 import json
 import os
@@ -47,4 +48,11 @@ if r["tool_calls"]:
     print("ok, модель вызвала", r["tool_calls"][0]["name"])
 else:
     print("модель ответила текстом без вызова функции:", (r["content"] or "")[:200])
+if "--image" in sys.argv:
+    from app.images import GigaChatImages, build_prompt  # noqa: E402
+    print("4. Нейрогенерация (text2image) … ", end="", flush=True)
+    data, mime = GigaChatImages(m).generate(build_prompt("Стеклянная копилка с зелёными ростками, мягкий утренний свет", "SMART_BANNER"), "SMART_BANNER")
+    out = Path(__file__).resolve().parent / ("gigachat_check.jpg" if mime == "image/jpeg" else "gigachat_check.png")
+    out.write_bytes(data)
+    print(f"ok, {len(data) // 1024} КБ → {out.name}")
 print("Готово: GigaChat подключён.")
