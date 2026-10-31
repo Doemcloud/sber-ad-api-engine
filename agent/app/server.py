@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import time
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -118,7 +118,7 @@ def confirm(body: ConfirmIn, authorization: str | None = Header(default=None)):
 
 
 @app.post("/sessions/{sid}/role")
-def set_role(sid: str, body: RoleIn, authorization: str | None = Header(default=None)):
+def set_role(body: RoleIn, sid: str = Path(pattern=SID), authorization: str | None = Header(default=None)):
     me = who(authorization)
     if me:
         body = RoleIn(user=me["user"], role=me["role"])
@@ -131,7 +131,7 @@ def set_role(sid: str, body: RoleIn, authorization: str | None = Header(default=
 
 
 @app.post("/sessions/{sid}/campaign/{cid}")
-def open_campaign(sid: str, cid: int, authorization: str | None = Header(default=None)):
+def open_campaign(sid: str = Path(pattern=SID), cid: int = Path(ge=1), authorization: str | None = Header(default=None)):
     me = who(authorization)
     if me and sid in SESSIONS:
         own(sid, me)
@@ -150,7 +150,7 @@ def list_sessions(user: str | None = None, authorization: str | None = Header(de
 
 
 @app.delete("/sessions/{sid}")
-def delete_session(sid: str, authorization: str | None = Header(default=None)):
+def delete_session(sid: str = Path(pattern=SID), authorization: str | None = Header(default=None)):
     own(sid, who(authorization))
     SESSIONS.pop(sid, None)
     save_sessions()
@@ -158,5 +158,5 @@ def delete_session(sid: str, authorization: str | None = Header(default=None)):
 
 
 @app.get("/sessions/{sid}")
-def get_session(sid: str, authorization: str | None = Header(default=None)):
+def get_session(sid: str = Path(pattern=SID), authorization: str | None = Header(default=None)):
     return agent.state(own(sid, who(authorization)), "")

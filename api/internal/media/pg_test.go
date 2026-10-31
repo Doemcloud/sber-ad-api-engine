@@ -3,6 +3,7 @@ package media
 import (
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 
 	_ "github.com/lib/pq"
@@ -13,7 +14,20 @@ func TestPGRoundTrip(t *testing.T) {
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL не задан")
 	}
-	db, err := sql.Open("postgres", dsn)
+	// своя схема: тесты пакета store параллельно пересоздают public
+	admin, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	if _, err := admin.Exec(`CREATE SCHEMA IF NOT EXISTS media_test`); err != nil {
+		t.Fatal(err)
+	}
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	db, err := sql.Open("postgres", dsn+sep+"search_path=media_test")
 	if err != nil {
 		t.Fatal(err)
 	}

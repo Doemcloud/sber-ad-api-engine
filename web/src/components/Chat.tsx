@@ -3,7 +3,7 @@ import type { ChatItem, Dicts, HistoryItem, PendingAction } from "../types";
 import { fmtReach } from "../ru";
 import { IconBot, IconHistory, IconPlus, IconSend, IconTrash } from "./Icons";
 import PlanCard from "./PlanCard";
-import { Img } from "./Previews";
+import { Img, isOwnMedia } from "./Previews";
 import { humanize, person } from "../ru";
 import { plural } from "../checklist";
 
@@ -148,9 +148,10 @@ export default function Chat(props: Props) {
             }
             if (m.kind === "image") {
               const target = IMAGE_FOR[m.format ?? ""] ?? "креатива";
+              const safe = !!m.url && (/^https:\/\//i.test(m.url) || isOwnMedia(m.url));
               return (
                 <figure key={i} className={`gen-image gen-${(m.format ?? "").toLowerCase()}`}>
-                  <a href={m.url} target="_blank" rel="noopener noreferrer" title="Открыть в полном размере"><Img src={m.url} className="gen-image-pic" /></a>
+                  {safe ? <a href={m.url} target="_blank" rel="noopener noreferrer" title="Открыть в полном размере"><Img src={m.url} className="gen-image-pic" /></a> : <Img className="gen-image-pic" />}
                   <figcaption>
                     <b>✦ Изображение для {target}</b>
                     {m.prompt && <span>{m.prompt}</span>}

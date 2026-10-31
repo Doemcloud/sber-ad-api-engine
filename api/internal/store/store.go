@@ -195,7 +195,14 @@ func (st *Store) Next(kind string) int64 {
 // Save фиксирует состояние: в PostgreSQL транзакцией, иначе снимком в файл (атомарно).
 func (st *Store) Save() error {
 	if st.pg != nil {
-		return st.pg.save(st.S)
+		err := st.pg.save(st.S)
+		if err != nil {
+			// транзакция откатилась — возвращаем память к тому, что лежит в БД, чтобы не расходиться
+			if s, e := st.pg.load(); e == nil {
+				st.S, st.pg.auditSaved = s, len(s.Audit)
+			}
+		}
+		return err
 	}
 	if st.statePath == "" {
 		return nil

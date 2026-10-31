@@ -15,8 +15,15 @@ const BASE: Template[] = [
   { id: "dark", name: "Контрастный", title: "Выгодное предложение", subtitle: "Только для клиентов", bg: "#1C2520FF", text: "#FFFFFFFF", source: "base" },
 ];
 const FAV_KEY = "sber-ad.favorite-templates";
-const loadFavs = (): Template[] => { try { return JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]"); } catch { return []; } };
-const css = (c: string) => (/^#[0-9A-Fa-f]{8}$/.test(c) ? `#${c.slice(1, 7)}` : c);
+const HEX = /^#[0-9A-Fa-f]{8}$/;
+// Избранное читается из браузера — принимаем только корректные записи с цветами #RRGGBBAA.
+const loadFavs = (): Template[] => {
+  try {
+    const xs = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]");
+    return Array.isArray(xs) ? xs.filter((t) => t && typeof t.name === "string" && HEX.test(t.bg) && HEX.test(t.text)).slice(0, 6) : [];
+  } catch { return []; }
+};
+const css = (c: string, fallback = "#21A038") => (HEX.test(c) ? `#${c.slice(1, 7)}` : fallback);
 
 const CONDITIONS = [
   "Укажите основную тему кампании",
@@ -51,7 +58,7 @@ export default function NewCampaignPage({ dicts, onSubmit, onCancel }: { dicts: 
         const b = d?.banners.find((x) => /^#[0-9A-Fa-f]{8}$/.test(String(x.content?.background?.color ?? "")));
         if (d && b && out.length < 3) {
           out.push({ id: `past-${b.id}`, name: d.name, title: b.content.title ?? d.name, subtitle: "Из прошлой кампании",
-            bg: String(b.content.background?.color), text: String(b.content.titleStyle?.textColor ?? "#FFFFFFFF"), source: "past" });
+            bg: String(b.content.background?.color), text: HEX.test(String(b.content.titleStyle?.textColor)) ? String(b.content.titleStyle?.textColor) : "#FFFFFFFF", source: "past" });
         }
       }
       setPast(out);

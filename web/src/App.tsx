@@ -51,18 +51,19 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   const [seen, setSeen] = useState<number>(() => { try { return Number(localStorage.getItem(seenKey) ?? 0); } catch { return 0; } });
   const setPage = (p: Page) => { setPageRaw(p); setMenuOpen(false); };
 
-  // лента событий для «Главной» и уведомлений: обновляем раз в 30 секунд
+  // лента событий для «Главной» и уведомлений: при каждом переходе по разделам и раз в 30 секунд
   useEffect(() => {
     let alive = true;
     const load = () => api.feed(60).then((f) => { if (alive) setFeed(f); }).catch(() => undefined);
     load();
     const t = window.setInterval(load, 30000);
     return () => { alive = false; window.clearInterval(t); };
-  }, []);
+  }, [page]);
   const notifications = feed.filter((e) => isNotification(e, role));
   const unread = notifications.filter((e) => e.id > seen).length;
   const markSeen = () => {
-    const top = notifications[0]?.id ?? seen;
+    // id растут с каждой записью, а лента отсортирована по времени — «прочитано» до максимального id
+    const top = Math.max(seen, ...notifications.map((e) => e.id));
     setSeen(top);
     try { localStorage.setItem(seenKey, String(top)); } catch { /* ok */ }
   };

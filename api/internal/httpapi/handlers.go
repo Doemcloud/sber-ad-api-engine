@@ -37,12 +37,41 @@ type API struct {
 
 	loginMu   sync.Mutex
 	loginHits map[string][]time.Time // попытки входа по IP — защита от перебора паролей
+
+	uploadMu   sync.Mutex
+	uploadHits map[string][]time.Time // загрузки изображений по пользователю — защита от забивания хранилища
 }
 
 const (
 	loginLimit  = 10
 	loginWindow = time.Minute
+	uploadLimit = 30 // изображений в минуту на пользователя
 )
+
+// hit — скользящее окно: не больше limit событий по ключу за window.
+func hit(mu *sync.Mutex, m *map[string][]time.Time, key string, limit int, window time.Duration) bool {
+	now := time.Now()
+	mu.Lock()
+	defer mu.Unlock()
+	if *m == nil {
+		*m = map[string][]time.Time{}
+	}
+	recent := (*m)[key][:0]
+	for _, t := range (*m)[key] {
+		if now.Sub(t) < window {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= limit {
+		(*m)[key] = recent
+		return false
+	}
+	(*m)[key] = append(recent, now)
+	if len(*m) > 10000 { // не копим ключи бесконечно
+		*m = map[string][]time.Time{key: (*m)[key]}
+	}
+	return true
+}
 
 // allowLogin — не больше loginLimit попыток входа с одного адреса за loginWindow.
 func (a *API) allowLogin(r *http.Request) bool {
@@ -50,27 +79,7 @@ func (a *API) allowLogin(r *http.Request) bool {
 	if err != nil {
 		ip = r.RemoteAddr
 	}
-	now := time.Now()
-	a.loginMu.Lock()
-	defer a.loginMu.Unlock()
-	if a.loginHits == nil {
-		a.loginHits = map[string][]time.Time{}
-	}
-	recent := a.loginHits[ip][:0]
-	for _, t := range a.loginHits[ip] {
-		if now.Sub(t) < loginWindow {
-			recent = append(recent, t)
-		}
-	}
-	if len(recent) >= loginLimit {
-		a.loginHits[ip] = recent
-		return false
-	}
-	a.loginHits[ip] = append(recent, now)
-	if len(a.loginHits) > 10000 { // не копим адреса бесконечно
-		a.loginHits = map[string][]time.Time{ip: a.loginHits[ip]}
-	}
-	return true
+	return hit(&a.loginMu, &a.loginHits, ip, loginLimit, loginWindow)
 }
 
 func (a *API) Routes() http.Handler {
@@ -191,14 +200,18 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request) {
 		authError(w, 403, "ROLE_FORBIDDEN", "Загружать изображения может только менеджер кампаний")
 		return
 	}
+	author := r.Header.Get("X-User")
+	if author == "" {
+		author = "service"
+	}
+	if !hit(&a.uploadMu, &a.uploadHits, author, uploadLimit, time.Minute) {
+		authError(w, 429, "MEDIA_RATE_LIMIT", "Слишком много изображений подряд — подождите минуту")
+		return
+	}
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, media.MaxSize+1))
 	if err != nil {
 		authError(w, 413, "MEDIA_TOO_LARGE", media.ErrSize.Error())
 		return
-	}
-	author := r.Header.Get("X-User")
-	if author == "" {
-		author = "service"
 	}
 	id, err := a.Media.Put(media.Image{Data: data, Prompt: r.URL.Query().Get("prompt"), Author: author})
 	switch {

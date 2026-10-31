@@ -5,6 +5,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"slices"
 	"sort"
@@ -78,7 +79,8 @@ func (s *Service) audit(campaignID int64, entity string, entityID int64, action 
 
 func (s *Service) save() *domain.APIError {
 	if err := s.st.Save(); err != nil {
-		return &domain.APIError{Status: 500, Errors: []domain.FieldError{{Code: "STORAGE_ERROR", Message: err.Error()}}}
+		log.Printf("сохранение: %v", err) // подробности — в лог, клиенту — без внутренностей СУБД
+		return &domain.APIError{Status: 500, Errors: []domain.FieldError{{Code: "STORAGE_ERROR", Message: "Не удалось сохранить изменения — попробуйте ещё раз"}}}
 	}
 	return nil
 }
@@ -826,14 +828,17 @@ func applyHeader(c *domain.Campaign, b map[string]any) *domain.APIError {
 	return nil
 }
 
+// idList / strList — списки ссылок из тела запроса (сырые значения или {value, label});
+// повторы схлопываются: «два раза одно место» — это одно место, а не ошибка хранения.
 func idList(v any) []int64 {
 	arr, _ := v.([]any)
-	out := []int64{}
+	out, seen := []int64{}, map[int64]bool{}
 	for _, x := range arr {
 		if m, ok := x.(map[string]any); ok {
 			x = m["value"]
 		}
-		if id := toInt(x); id != 0 {
+		if id := toInt(x); id != 0 && !seen[id] {
+			seen[id] = true
 			out = append(out, id)
 		}
 	}
@@ -842,12 +847,13 @@ func idList(v any) []int64 {
 
 func strList(v any) []string {
 	arr, _ := v.([]any)
-	out := []string{}
+	out, seen := []string{}, map[string]bool{}
 	for _, x := range arr {
 		if m, ok := x.(map[string]any); ok {
 			x = m["value"]
 		}
-		if s, ok := x.(string); ok && s != "" {
+		if s, ok := x.(string); ok && s != "" && !seen[s] {
+			seen[s] = true
 			out = append(out, s)
 		}
 	}

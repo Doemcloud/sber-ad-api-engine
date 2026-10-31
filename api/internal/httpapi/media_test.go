@@ -92,6 +92,17 @@ func TestMediaUploadServeAndUseInBanner(t *testing.T) {
 	if code, out := call(h, "POST", "/campaigns/101/banners", body, map[string]string{"Authorization": "Bearer " + manager}); code != 201 {
 		t.Fatalf("баннер с изображением: %d %v", code, out)
 	}
+	// не больше uploadLimit загрузок в минуту на пользователя
+	limited := false
+	for i := 0; i < uploadLimit+1; i++ {
+		if code, _ := upload(manager, pngBytes(t)); code == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("ждали 429 после лимита загрузок")
+	}
 	bad := strings.Replace(body, url, "http://evil.example/x.png", 1)
 	if code, _ := call(h, "POST", "/campaigns/101/banners", bad, map[string]string{"Authorization": "Bearer " + manager}); code != 400 {
 		t.Fatalf("чужая http-ссылка: ждали 400, получили %d", code)
