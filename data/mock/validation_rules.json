@@ -390,6 +390,18 @@
       "group": "request",
       "message": "Некорректный запрос",
       "field": null
+    },
+    {
+      "code": "RESUME_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Возобновить можно только остановленную кампанию",
+      "field": "state"
+    },
+    {
+      "code": "RESUME_PERIOD_ENDED",
+      "group": "lifecycle",
+      "message": "Период показа уже закончился — возобновлять нечего, создайте новую кампанию",
+      "field": "endDate"
     }
   ],
   "warnings": [

@@ -270,6 +270,24 @@ class Scenarios(unittest.TestCase):
         self.assertFalse(st["awaiting_fix"])
         self.assertIn("теги", st["pending_action"]["steps"][0]["args"]["comment"])
 
+    # ---------------- Возобновление остановленной кампании через модератора
+    def test_resume_stopped_campaign(self):
+        api = ApiClient()
+        api.request("POST", "/campaigns/109/stop", {}, user="ivanov.p", role="campaignManager")
+        a, llm = self.make([
+            calls(call("resume", campaign_id=109, comment="Продлеваем подписку до конца года")),
+            say("Отправляю запрос на возобновление модератору — подтвердите."),
+            say("Запрос отправлен: кампания на модерации. После одобрения её можно будет снова запустить."),
+        ])
+        st = a.chat(None, "Возобнови «Мобильная подписка: месяц в подарок»", user="ivanov.p", role="campaignManager")
+        self.assertIn("возобновление", st["pending_action"]["steps"][0]["summary"])
+        st = a.confirm(st["session_id"], st["pending_action"]["id"], True)
+        self.assertTrue(st["last_result"][0]["ok"], st["last_result"])
+        self.assertEqual(api.get("/campaigns/109")["state"], "ON_MODERATION")
+        api.request("POST", "/campaigns/109/approve", {}, user="petrova.m", role="campaignModerator")
+        c = api.request("POST", "/campaigns/109/activate", {}, user="ivanov.p", role="campaignManager")
+        self.assertEqual((c["state"], c["published"]), ("ACTIVE", True))
+
 
 if __name__ == "__main__":
     unittest.main()

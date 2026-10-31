@@ -109,7 +109,8 @@ TOOLS: dict[str, tuple] = {
     "approve": ("write", "POST", "/campaigns/{campaign_id}/approve", "campaignModerator", "Одобрить (роль модератора, только ON_MODERATION).", obj({"campaign_id": INT}, ["campaign_id"])),
     "decline": ("write", "POST", "/campaigns/{campaign_id}/decline", "campaignModerator", "Отклонить с обязательным комментарием (роль модератора).", obj({"campaign_id": INT, "comment": S}, ["campaign_id", "comment"])),
     "activate": ("write", "POST", "/campaigns/{campaign_id}/activate", "campaignManager", "Активировать одобренную кампанию: выгрузка в Content Broker, published=true.", obj({"campaign_id": INT}, ["campaign_id"])),
-    "stop": ("write", "POST", "/campaigns/{campaign_id}/stop", "campaignManager", "Остановить показ (published=true → STOPPED). Возобновить нельзя.", obj({"campaign_id": INT}, ["campaign_id"])),
+    "stop": ("write", "POST", "/campaigns/{campaign_id}/stop", "campaignManager", "Остановить показ (published=true → STOPPED). Возобновить потом можно только через resume и одобрение модератора.", obj({"campaign_id": INT}, ["campaign_id"])),
+    "resume": ("write", "POST", "/campaigns/{campaign_id}/resume", "campaignManager", "Запросить возобновление остановленной кампании (STOPPED → ON_MODERATION). После одобрения модератором кампанию запускают через activate. Нельзя, если период показа закончился.", obj({"campaign_id": INT, "comment": {"type": "string", "description": "причина возобновления для модератора (необязательно)"}}, ["campaign_id"])),
 }
 
 

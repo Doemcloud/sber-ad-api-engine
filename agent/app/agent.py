@@ -374,6 +374,10 @@ class Agent:
                     errs = v["errors"]
             summary = "Отправить кампанию на модерацию"
             preview = {"kind": "transition", "to": "ON_MODERATION"}
+        elif name == "resume":
+            why = (a.get("comment") or "").strip()
+            summary = "Запросить возобновление показов — кампания уйдёт модератору" + (f" с пояснением «{why}»" if why else "")
+            preview = {"kind": "transition", "to": "ON_MODERATION"}
         elif name == "decline":
             if not (a.get("comment") or "").strip():
                 errs.append(V.err("DECLINE_COMMENT_REQUIRED", "comment", "нужен комментарий модератора"))
@@ -538,6 +542,8 @@ class Agent:
             body = {"code": a["code"], "description": a["description"]}
         elif name == "create_tag":
             body = {"name": a["name"]}
+        elif name == "resume":
+            body = {"comment": (a.get("comment") or "").strip()}
         elif name == "decline":
             body = {"comment": a["comment"]}
         elif method == "POST":

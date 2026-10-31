@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"adcamp/internal/domain"
 	"adcamp/internal/store"
@@ -261,4 +262,50 @@ func TestNameDuplicateIgnoresSelf(t *testing.T) {
 	must(t, e)
 	_, e = s.Create(manager, obj(t, `{"name":"Даты","startDate":"2026-11-05","startTime":"10:00","endDate":"2026-11-05","endTime":"09:00","topic":"SALES","audienceType":"ALL_USERS"}`))
 	wantCode(t, e, "DATE_RANGE_INVALID")
+}
+
+// Остановленную кампанию можно возобновить только через модератора.
+func TestResumeStoppedCampaign(t *testing.T) {
+	s := newSvc(t)
+	s.Now = func() time.Time { return time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC) }
+	mgr := Actor{User: "ivanov.p", Role: "campaignManager"}
+	mod := Actor{User: "petrova.m", Role: "campaignModerator"}
+
+	if _, e := s.Stop(mgr, 102); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := s.Activate(mgr, 102); e == nil {
+		t.Fatal("остановленную кампанию нельзя запустить без модератора")
+	}
+	if _, e := s.Resume(mod, 102, ""); e == nil || e.Errors[0].Code != "ROLE_FORBIDDEN" {
+		t.Fatalf("запрос возобновления — только менеджер: %v", e)
+	}
+	c, e := s.Resume(mgr, 102, "Продлеваем акцию до конца ноября")
+	if e != nil || c.State != "ON_MODERATION" || c.Published {
+		t.Fatalf("resume: %+v %v", c, e)
+	}
+	if _, e := s.Resume(mgr, 102, ""); e == nil || e.Errors[0].Code != "RESUME_NOT_ALLOWED" {
+		t.Fatalf("повторный запрос: %v", e)
+	}
+	if c, e = s.Approve(mod, 102); e != nil || c.State != "APPROVED" {
+		t.Fatalf("approve: %v", e)
+	}
+	if c, e = s.Activate(mgr, 102); e != nil || c.State != "ACTIVE" || !c.Published {
+		t.Fatalf("activate: %+v %v", c, e)
+	}
+	log, _ := s.Audit(102)
+	var actions []string
+	for _, x := range log {
+		actions = append(actions, x.Action)
+	}
+	if got := strings.Join(actions[len(actions)-4:], ","); got != "STOP,RESUME_REQUEST,APPROVE,ACTIVATE" {
+		t.Fatalf("аудит: %s", got)
+	}
+
+	// закончившийся период — возобновлять нечего
+	s.Now = func() time.Time { return time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Stop(mgr, 102)
+	if _, e := s.Resume(mgr, 102, ""); e == nil || e.Errors[0].Code != "RESUME_PERIOD_ENDED" {
+		t.Fatalf("период закончился: %v", e)
+	}
 }

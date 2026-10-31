@@ -107,6 +107,12 @@ func (a *API) Routes() http.Handler {
 	m.HandleFunc("POST /campaigns/{id}/activate", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
 		return a.S.Activate(ac, id(r))
 	}))
+	m.HandleFunc("POST /campaigns/{id}/resume", func(w http.ResponseWriter, r *http.Request) {
+		var b struct{ Comment string }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&b) // тело необязательно
+		v, e := a.S.Resume(actor(r), id(r), b.Comment)
+		respond(w, v, e, 200)
+	})
 	m.HandleFunc("POST /campaigns/{id}/stop", a.noBody(func(ac service.Actor, r *http.Request) (any, *domain.APIError) {
 		return a.S.Stop(ac, id(r))
 	}))

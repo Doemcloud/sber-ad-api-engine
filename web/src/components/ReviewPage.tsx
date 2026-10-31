@@ -71,6 +71,9 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
   if (!c) return <div className="page"><div className="muted">{error ?? "Загружаем кампанию…"}</div></div>;
 
   const lastDecline = [...audit].reverse().find((a) => a.action === "DECLINE");
+  // Кампания на модерации по запросу менеджера возобновить показы (а не новая или исправленная).
+  const lastSubmit = [...audit].reverse().find((a) => a.action === "RESUME_REQUEST" || a.action === "TO_MODERATION");
+  const resumeRequest = c.state === "ON_MODERATION" && lastSubmit?.action === "RESUME_REQUEST" ? lastSubmit : undefined;
   const editable = EDITABLE.includes(c.state) && who.role === "campaignManager";
   const canSubmit = EDITABLE_FOR_SUBMIT.includes(c.state) && blockers.length === 0 && (warnings.length === 0 || ack);
   const included = c.segments.included.map((code) => dicts?.segments.find((s) => s.code === code));
@@ -173,9 +176,14 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
 
           <div className="hint-box standalone"><IconClock size={16} /><span>Период показа: {fmtPeriod(c)} (UTC). Ограничений частоты показов нет — не увидят рекламу только исключённые сегменты.</span></div>
 
-          <SubmitCard c={c} who={who} blockers={blockers.length} warnings={warnings.map((w) => w.title)} ack={ack} setAck={setAck}
+          <SubmitCard c={c} who={who} resumeRequest={resumeRequest} blockers={blockers.length} warnings={warnings.map((w) => w.title)} ack={ack} setAck={setAck}
             canSubmit={canSubmit} busy={busy} comment={comment} setComment={setComment}
-            onAction={(a) => act(() => a === "decline" ? actions.decline(c.id, comment, who) : actions.transition(c.id, a, who))} />
+            onAction={(a) => act(async () => {
+              if (a === "decline") await actions.decline(c.id, comment, who);
+              else if (a === "resume") await actions.resume(c.id, comment, who);
+              else await actions.transition(c.id, a, who);
+              setComment("");
+            })} />
         </div>
       </div>
     </div>
@@ -183,13 +191,13 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
 }
 
 interface SubmitProps {
-  c: CampaignDetails; who: Who; blockers: number; warnings: string[]; ack: boolean; setAck: (v: boolean) => void;
+  c: CampaignDetails; who: Who; resumeRequest?: AuditEntry; blockers: number; warnings: string[]; ack: boolean; setAck: (v: boolean) => void;
   canSubmit: boolean; busy: boolean; comment: string; setComment: (v: string) => void;
-  onAction: (a: "to-moderation" | "approve" | "decline" | "activate" | "stop") => void;
+  onAction: (a: "to-moderation" | "approve" | "decline" | "activate" | "stop" | "resume") => void;
 }
 
 // Тёмная карточка действия: что можно сделать с кампанией прямо сейчас и почему.
-function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, comment, setComment, onAction }: SubmitProps) {
+function SubmitCard({ c, who, resumeRequest, blockers, warnings, ack, setAck, canSubmit, busy, comment, setComment, onAction }: SubmitProps) {
   const manager = who.role === "campaignManager";
   const [declining, setDeclining] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -198,7 +206,7 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
     <button className="cta danger-outline" disabled={busy} onClick={() => setStopping(true)}>Остановить показы</button>
   ) : (
     <div className="stop-confirm">
-      <div className="decline-label">Остановить показы «{c.name}»? Клиенты перестанут видеть рекламу сразу. Запустить эту кампанию снова будет нельзя — только создать новую.</div>
+      <div className="decline-label">Остановить показы «{c.name}»? Клиенты перестанут видеть рекламу сразу. Возобновить показы потом можно будет только с разрешения модератора.</div>
       <div className="row">
         <button className="cta danger" disabled={busy} onClick={() => { setStopping(false); onAction("stop"); }}>Да, остановить показы</button>
         <button className="cta ghost" disabled={busy} onClick={() => setStopping(false)}>Отмена</button>
@@ -231,10 +239,12 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
     );
     foot = !manager ? "Отправляет на модерацию менеджер кампании." : blockers ? `Исправьте ${blockers} ${plural(blockers, "ошибку", "ошибки", "ошибок")} — кнопка станет доступна автоматически.` : warnings.length && !ack ? "Отметьте, что видели замечания." : "Действие сохранится в истории изменений от вашего имени.";
   } else if (c.state === "ON_MODERATION") {
-    head = { tone: "info", title: "На модерации", text: "Кампания ждёт решения модератора. Вносить правки сейчас нельзя." };
+    head = resumeRequest
+      ? { tone: "info", title: "Запрос на возобновление показов", text: `${person(resumeRequest.actor)} просит снова запустить остановленную кампанию${resumeRequest.comment ? `: «${resumeRequest.comment}».` : "."} После одобрения менеджер сможет запустить показы.` }
+      : { tone: "info", title: "На модерации", text: "Кампания ждёт решения модератора. Вносить правки сейчас нельзя." };
     body = who.role !== "campaignModerator" ? null : !declining ? (
       <div className="row">
-        <button className="cta" disabled={busy} onClick={() => onAction("approve")}><IconCheck size={17} /> Одобрить</button>
+        <button className="cta" disabled={busy} onClick={() => onAction("approve")}><IconCheck size={17} /> {resumeRequest ? "Разрешить" : "Одобрить"}</button>
         <button className="cta ghost" disabled={busy} onClick={() => setDeclining(true)}>На доработку</button>
       </div>
     ) : (
@@ -264,8 +274,20 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
     head = { tone: "ok", title: "Показы идут", text: "Кампания показывается клиентам." };
     body = stopBlock;
     foot = manager ? "После остановки кампания останется в списке и истории, но перестанет показываться." : "Остановить показы может менеджер кампании.";
+  } else if (c.state === "STOPPED") {
+    head = { tone: "info", title: "Показы остановлены", text: manager
+      ? "Возобновить показы можно с разрешения модератора: отправьте запрос — после одобрения запустите кампанию снова."
+      : "Менеджер может запросить возобновление — тогда кампания придёт к вам в очередь модерации." };
+    body = manager ? (
+      <div className="decline-form">
+        <textarea className="dark-input" rows={2} placeholder="Почему возобновляем? Модератор увидит пояснение (необязательно)"
+          value={comment} onChange={(e) => setComment(e.target.value)} />
+        <button className="cta" disabled={busy} onClick={() => onAction("resume")}><IconRocket size={17} /> Запросить возобновление</button>
+      </div>
+    ) : null;
+    foot = manager ? "Изменить остановленную кампанию нельзя — она уйдёт модератору в том виде, в каком была." : "";
   } else {
-    head = { tone: "info", title: STATE_RU[c.state] ?? c.state, text: "Кампания остановлена: её нельзя изменить или запустить снова." };
+    head = { tone: "info", title: STATE_RU[c.state] ?? c.state, text: "Действий с кампанией в этом статусе нет." };
   }
 
   const Icon = head.tone === "err" ? IconAlertTriangle : head.tone === "ok" ? IconCheck : IconInfo;

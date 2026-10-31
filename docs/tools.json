@@ -1196,7 +1196,7 @@
   },
   {
     "name": "stop",
-    "description": "Остановить показ (published=true → STOPPED). Возобновить нельзя. Требует подтверждения менеджера: шаг добавится в план.",
+    "description": "Остановить показ (published=true → STOPPED). Возобновить потом можно только через resume и одобрение модератора. Требует подтверждения менеджера: шаг добавится в план.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -1210,6 +1210,28 @@
     },
     "x-kind": "write",
     "x-http": "POST /campaigns/{campaign_id}/stop",
+    "x-role": "campaignManager"
+  },
+  {
+    "name": "resume",
+    "description": "Запросить возобновление остановленной кампании (STOPPED → ON_MODERATION). После одобрения модератором кампанию запускают через activate. Нельзя, если период показа закончился. Требует подтверждения менеджера: шаг добавится в план.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "campaign_id": {
+          "type": "integer"
+        },
+        "comment": {
+          "type": "string",
+          "description": "причина возобновления для модератора (необязательно)"
+        }
+      },
+      "required": [
+        "campaign_id"
+      ]
+    },
+    "x-kind": "write",
+    "x-http": "POST /campaigns/{campaign_id}/resume",
     "x-role": "campaignManager"
   }
 ]

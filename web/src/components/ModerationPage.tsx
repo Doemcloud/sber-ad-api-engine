@@ -10,7 +10,17 @@ import { IconShield } from "./Icons";
 export default function ModerationPage({ dicts, query, onOpen }: { dicts: Dicts | null; query: string; onOpen: (id: number) => void }) {
   const [items, setItems] = useState<CampaignListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { api.campaigns().then(setItems).catch((e: Error) => setError(e.message)); }, []);
+  const [resumes, setResumes] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    api.campaigns().then(async (xs) => {
+      setItems(xs);
+      // какие из ждущих — запросы на возобновление остановленных кампаний
+      const onMod = xs.filter((c) => c.state === "ON_MODERATION");
+      const logs = await Promise.all(onMod.map((c) => api.audit(c.id).catch(() => [])));
+      const ids = onMod.filter((_, i) => [...logs[i]].reverse().find((a) => a.action === "RESUME_REQUEST" || a.action === "TO_MODERATION")?.action === "RESUME_REQUEST").map((c) => c.id);
+      setResumes(new Set(ids));
+    }).catch((e: Error) => setError(e.message));
+  }, []);
 
   const q = query.trim().toLowerCase();
   const match = (c: CampaignListItem) => !q || `${c.name} ${topicLabel(c.topic, dicts)}`.toLowerCase().includes(q);
@@ -23,7 +33,7 @@ export default function ModerationPage({ dicts, query, onOpen }: { dicts: Dicts 
       <tbody>
         {rows.map((c) => (
           <tr key={c.id} onClick={() => onOpen(c.id)}>
-            <td><b>{c.name}</b></td>
+            <td><b>{c.name}</b>{resumes.has(c.id) && <div className="muted small">запрос на возобновление показов</div>}</td>
             <td><StateBadge state={c.state} published={c.published} /></td>
             <td>{topicLabel(c.topic, dicts)}</td>
             <td className="muted">{fmtDate(c.startDate)} — {c.endDate ? fmtDate(c.endDate) : "без даты окончания"}</td>

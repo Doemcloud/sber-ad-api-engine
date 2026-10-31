@@ -693,6 +693,32 @@ func (s *Service) Activate(a Actor, id int64) (*domain.Campaign, *domain.APIErro
 	return s.transition(c, a, domain.StateActive, "ACTIVATE", nil)
 }
 
+// Resume — запрос менеджера на возобновление остановленной кампании.
+// Кампания уходит модератору (ON_MODERATION); после одобрения её можно запустить снова.
+func (s *Service) Resume(a Actor, id int64, comment string) (*domain.Campaign, *domain.APIError) {
+	if e := requireRole(a, domain.RoleManager); e != nil {
+		return nil, e
+	}
+	s.st.Lock()
+	defer s.st.Unlock()
+	c, e := s.campaign(id)
+	if e != nil {
+		return nil, e
+	}
+	if c.State != domain.StateStopped {
+		return nil, domain.Fail("RESUME_NOT_ALLOWED", "state", "текущий статус "+c.State)
+	}
+	if c.EndDate != nil && *c.EndDate < s.Now().Format("2006-01-02") {
+		return nil, domain.Fail("RESUME_PERIOD_ENDED", "endDate", "окончание "+*c.EndDate)
+	}
+	c.LastEditAuthor = a.User // одобрить возобновление должен не тот, кто его запросил
+	var cm *string
+	if t := strings.TrimSpace(comment); t != "" {
+		cm = &t
+	}
+	return s.transition(c, a, domain.StateOnModeration, "RESUME_REQUEST", cm)
+}
+
 func (s *Service) Stop(a Actor, id int64) (*domain.Campaign, *domain.APIError) {
 	if e := requireRole(a, domain.RoleManager); e != nil {
 		return nil, e

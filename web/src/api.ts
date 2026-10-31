@@ -87,6 +87,9 @@ const as = (w: Who, init: RequestInit = {}): RequestInit => ({ ...init, headers:
 export const actions = {
   transition: (id: number, action: "to-moderation" | "approve" | "activate" | "stop", w: Who) =>
     req<CampaignDetails>(`${API_URL}/campaigns/${id}/${action}`, as(w, post({}))),
+  // Возобновление остановленной кампании: уходит модератору, после одобрения — «Запустить».
+  resume: (id: number, comment: string, w: Who) =>
+    req<CampaignDetails>(`${API_URL}/campaigns/${id}/resume`, as(w, post({ comment }))),
   decline: (id: number, comment: string, w: Who) =>
     req<CampaignDetails>(`${API_URL}/campaigns/${id}/decline`, as(w, post({ comment }))),
   // PUT — полная замена шапки: GET → слияние → PUT, словарные поля как {value, label}.

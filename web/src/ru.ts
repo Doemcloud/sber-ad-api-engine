@@ -38,6 +38,7 @@ export const ENTITY_RU: Record<string, string> = {
 export const AUDIT_ACTION_RU: Record<string, string> = {
   CREATE: "создание", UPDATE: "изменение", DELETE: "удаление", TO_MODERATION: "отправлена на модерацию",
   DECLINE: "возвращена на доработку", APPROVE: "одобрена", ACTIVATE: "запущена", STOP: "показы остановлены",
+  RESUME_REQUEST: "запрошено возобновление показов",
 };
 
 export const FIELD_RU: Record<string, string> = {
