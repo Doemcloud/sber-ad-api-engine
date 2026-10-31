@@ -1,0 +1,10 @@
+[
+  {"id": "seg_office_center", "name": "Офисные сотрудники в центре", "conditions": {"age": "25-45", "geo": "центр города", "time": "будни 8-19"}, "reach": 42000},
+  {"id": "seg_coffee_lovers", "name": "Часто покупают кофе", "conditions": {"category_spend": "кафе и кофейни", "freq": ">=8 раз/мес"}, "reach": 65000},
+  {"id": "seg_young_students", "name": "Студенты", "conditions": {"age": "18-24", "segment": "молодёжный"}, "reach": 38000},
+  {"id": "seg_car_owners", "name": "Автовладельцы", "conditions": {"category_spend": "АЗС, автосервис"}, "reach": 51000},
+  {"id": "seg_travelers", "name": "Путешественники", "conditions": {"category_spend": "авиабилеты, отели", "period": "12 мес"}, "reach": 23000},
+  {"id": "seg_families", "name": "Семьи с детьми", "conditions": {"category_spend": "детские товары"}, "reach": 47000},
+  {"id": "seg_premium", "name": "Премиальные клиенты", "conditions": {"segment": "премиум"}, "reach": 9000},
+  {"id": "seg_no_credit_card", "name": "Без кредитной карты", "conditions": {"products": "нет кредитной карты", "age": "21-60"}, "reach": 120000}
+]

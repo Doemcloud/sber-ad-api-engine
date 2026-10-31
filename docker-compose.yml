@@ -1,0 +1,33 @@
+services:
+  api:
+    build: ./api
+    ports: ["8080:8080"]
+    volumes:
+      - ./data/mock:/data/mock:ro
+      - api-state:/state
+    environment:
+      PORT: 8080
+      SEED_DIR: /data/mock
+      STATE_DIR: /state
+
+  agent:
+    build: ./agent
+    ports: ["8000:8000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      API_URL: http://api:8080
+    depends_on: [api]
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_AGENT_URL: http://localhost:8000
+        VITE_API_URL: http://localhost:8080
+    ports: ["3000:80"]
+    depends_on: [agent, api]
+
+volumes:
+  api-state:

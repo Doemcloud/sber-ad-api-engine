@@ -1,0 +1,8 @@
+[
+  {"id": "pl_main_smart", "name": "Смарт-баннер, главный экран", "surface": "app", "creative_types": ["smart_banner"], "limits": {"title": 40, "text": 60, "button": 20}, "size": "343x96"},
+  {"id": "pl_recommend", "name": "Баннер в разделе «Рекомендуем»", "surface": "app", "creative_types": ["feed_banner"], "limits": {"title": 40, "text": 90, "button": 20}, "size": "343x180"},
+  {"id": "pl_for_life", "name": "Промо-баннер «Для жизни»", "surface": "app", "creative_types": ["promo_banner"], "limits": {"title": 45, "text": 120, "button": 20}, "size": "343x240"},
+  {"id": "pl_stories", "name": "Сторис на главном экране", "surface": "app", "creative_types": ["stories"], "limits": {"title": 40, "text": 60, "slides": 5}, "size": "1080x1920"},
+  {"id": "pl_push", "name": "Push-уведомление", "surface": "app", "creative_types": ["push"], "limits": {"title": 50, "text": 150}, "size": null},
+  {"id": "pl_web_banner", "name": "Баннер в веб-версии", "surface": "web", "creative_types": ["feed_banner"], "limits": {"title": 40, "text": 90, "button": 20}, "size": "728x90"}
+]
