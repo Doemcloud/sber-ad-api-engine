@@ -1,5 +1,5 @@
 import type {
-  AgentState, AuditEntry, BannerType, CampaignDetails, CampaignListItem,
+  AgentState, AuditEntry, HistoryItem, BannerType, CampaignDetails, CampaignListItem,
   Dicts, Place, Role, Segment, Tag, Topic, Validation,
 } from "./types";
 
@@ -29,6 +29,10 @@ export const agent = {
     req<AgentState>(`${AGENT_URL}/sessions/${session_id}/role`, post({ user, role })),
   openCampaign: (session_id: string, id: number) =>
     req<AgentState>(`${AGENT_URL}/sessions/${session_id}/campaign/${id}`, { method: "POST" }),
+  // История диалогов: список, восстановление, удаление.
+  sessions: (user?: string) => req<HistoryItem[]>(`${AGENT_URL}/sessions${user ? `?user=${encodeURIComponent(user)}` : ""}`),
+  session: (session_id: string) => req<AgentState>(`${AGENT_URL}/sessions/${session_id}`),
+  deleteSession: (session_id: string) => req<{ deleted: string }>(`${AGENT_URL}/sessions/${session_id}`, { method: "DELETE" }),
 };
 
 export const api = {

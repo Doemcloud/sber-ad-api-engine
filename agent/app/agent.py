@@ -13,8 +13,9 @@ from __future__ import annotations
 import copy
 import json
 import os
+import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,6 +35,11 @@ HEADER_KEYS = ["name", "marketingName", "startDate", "startTime", "endDate", "en
 
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def stamp() -> str:
+    """Время с микросекундами — для сортировки истории диалогов."""
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 def clip_json(result, limit: int = 12000) -> str:
@@ -63,9 +69,45 @@ class Session:
     pending: dict | None = None  # план, ждущий подтверждения
     journal: list = field(default_factory=list)
     last_result: list = field(default_factory=list)
+    title: str = ""
+    created_at: str = field(default_factory=lambda: now())
+    updated_at: str = field(default_factory=lambda: stamp())
+    transcript: list = field(default_factory=list)  # лента для UI: реплики, итоги выполнения — для истории
 
 
 SESSIONS: dict[str, Session] = {}
+_STORE_LOCK = threading.Lock()
+
+
+def sessions_file() -> Path | None:
+    v = os.getenv("SESSIONS_FILE", str(Path(__file__).resolve().parent.parent / "state" / "sessions.json"))
+    return Path(v) if v else None
+
+
+def save_sessions() -> None:
+    """Снимок всех диалогов на диск: история переживает перезапуск агента."""
+    path = sessions_file()
+    if not path:
+        return
+    with _STORE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({k: asdict(v) for k, v in SESSIONS.items()}, ensure_ascii=False, default=str), encoding="utf-8")
+        tmp.replace(path)
+
+
+def load_sessions() -> int:
+    path = sessions_file()
+    if not path or not path.exists():
+        return 0
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    known = {f.name for f in fields(Session)}
+    for k, v in raw.items():
+        SESSIONS[k] = Session(**{x: y for x, y in v.items() if x in known})
+    return len(raw)
 
 
 class Agent:
@@ -105,11 +147,22 @@ class Agent:
         return {"role": "system", "content": text}
 
     # ------------------------------------------------------------------ диалог
+    def note(self, s: Session, item: dict) -> None:
+        s.transcript.append({**item, "at": now()})
+        s.updated_at = stamp()
+
     def chat(self, sid: str | None, text: str, user: str | None = None, role: str | None = None) -> dict:
         s = self.session(sid, user, role)
         s.messages.append({"role": "user", "content": text})
         self.log(s, "user_message", text)
+        if not s.title:
+            s.title = text.strip().replace("\n", " ")[:80]
+        self.note(s, {"kind": "user", "text": text})
+        save_sessions()  # реплика менеджера сохранена ещё до ответа модели
         reply = self._run(s)
+        if reply:
+            self.note(s, {"kind": "assistant", "text": reply})
+        save_sessions()
         return self.state(s, reply)
 
     def _run(self, s: Session) -> str:
@@ -348,7 +401,8 @@ class Agent:
         if not approved:
             self.log(s, "plan_rejected", plan["title"])
             s.messages.append({"role": "user", "content": f"[система] Менеджер отклонил план «{plan['title']}». {note}".strip()})
-            return self.state(s, self._run(s))
+            self.note(s, {"kind": "result", "results": [], "rejected": plan["title"]})
+            return self._finish(s)
         self.log(s, "plan_approved", plan["title"])
         results, failed = [], None
         for st in plan["steps"]:
@@ -375,7 +429,16 @@ class Agent:
             except ApiError:
                 pass
         s.messages.append({"role": "user", "content": "[система] План подтверждён и выполнен: " + json.dumps(report, ensure_ascii=False)})
-        return self.state(s, self._run(s))
+        self.note(s, {"kind": "result", "results": results})
+        save_sessions()
+        return self._finish(s)
+
+    def _finish(self, s: Session) -> dict:
+        reply = self._run(s)
+        if reply:
+            self.note(s, {"kind": "assistant", "text": reply})
+        save_sessions()
+        return self.state(s, reply)
 
     def _resolve(self, s: Session, v):
         if isinstance(v, str) and v.startswith("$"):
@@ -442,9 +505,26 @@ class Agent:
             s.refs[st["ref"]] = res["id"]
         return res
 
+    def history(self, user: str | None = None) -> list[dict]:
+        """Список диалогов для панели «История»: свежие сверху, пустые не показываем."""
+        out, names = [], {}
+        for x in SESSIONS.values():
+            if not x.transcript or (user and x.user != user):
+                continue
+            if x.campaign_id and x.campaign_id not in names:
+                try:
+                    names[x.campaign_id] = self.api.get(f"/campaigns/{x.campaign_id}").get("name")
+                except Exception:  # кампания удалена или API недоступен — история всё равно показывается
+                    names[x.campaign_id] = None
+            out.append({"id": x.id, "title": x.title or "Без названия", "updated_at": x.updated_at, "created_at": x.created_at,
+                        "user": x.user, "campaign_id": x.campaign_id, "campaign_name": names.get(x.campaign_id),
+                        "messages": sum(1 for t in x.transcript if t["kind"] == "user"), "pending": bool(x.pending)})
+        return sorted(out, key=lambda r: r["updated_at"], reverse=True)
+
     # ------------------------------------------------------------------ состояние для UI
     def state(self, s: Session, reply: str) -> dict:
-        out = {"session_id": s.id, "user": s.user, "role": s.role, "reply": reply,
+        out = {"session_id": s.id, "user": s.user, "role": s.role, "reply": reply, "title": s.title,
+               "transcript": s.transcript,
                "campaign_id": s.campaign_id, "pending_action": s.pending, "last_result": s.last_result,
                "journal": s.journal[-30:]}
         if s.campaign_id:

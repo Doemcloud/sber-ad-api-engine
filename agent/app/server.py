@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .agent import SESSIONS, Agent
+from .agent import SESSIONS, Agent, load_sessions, save_sessions
 from .api_client import ApiClient
 from .llm import from_env
 from .tools import schemas
@@ -13,6 +13,7 @@ from .tools import schemas
 app = FastAPI(title="AI-ассистент рекламных кампаний")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 agent = Agent(ApiClient(), from_env())
+load_sessions()  # история диалогов переживает перезапуск
 
 
 class ChatIn(BaseModel):
@@ -62,6 +63,7 @@ def confirm(body: ConfirmIn):
 def set_role(sid: str, body: RoleIn):
     s = agent.session(sid, body.user, body.role)
     agent.log(s, "role_changed", {"user": body.user, "role": body.role})
+    save_sessions()
     return agent.state(s, "")
 
 
@@ -69,7 +71,22 @@ def set_role(sid: str, body: RoleIn):
 def open_campaign(sid: str, cid: int):
     s = agent.session(sid)
     s.campaign_id = cid
+    save_sessions()
     return agent.state(s, "")
+
+
+@app.get("/sessions")
+def list_sessions(user: str | None = None):
+    """История диалогов (панель «История» в разделе ассистента)."""
+    return agent.history(user)
+
+
+@app.delete("/sessions/{sid}")
+def delete_session(sid: str):
+    if SESSIONS.pop(sid, None) is None:
+        raise HTTPException(404, "сессия не найдена")
+    save_sessions()
+    return {"deleted": sid}
 
 
 @app.get("/sessions/{sid}")

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { agent, api } from "./api";
 import { buildChecklist, counts, plural } from "./checklist";
-import type { AgentState, ChatItem, Dicts, Role } from "./types";
+import type { AgentState, ChatItem, Dicts, HistoryItem, Role, TranscriptItem } from "./types";
 import Chat from "./components/Chat";
 import CampaignView, { StateBadge } from "./components/CampaignView";
 import CampaignList from "./components/CampaignList";
@@ -11,23 +11,47 @@ import { IconShield } from "./components/Icons";
 import { Sidebar, Topbar, USERS, type Page } from "./components/Shell";
 
 const newSid = () => Math.random().toString(36).slice(2, 14);
+
+// Текущий диалог запоминается в браузере: после перезагрузки страницы он открывается снова.
+const SID_KEY = "sber-ad.assistant.sid";
+const storedSid = () => { try { return localStorage.getItem(SID_KEY); } catch { return null; } };
+const rememberSid = (v: string) => { try { localStorage.setItem(SID_KEY, v); } catch { /* приватный режим — просто не запоминаем */ } };
 const GREETING: ChatItem = { kind: "assistant", text: "Расскажите о кампании своими словами: что продвигаем, для кого, где показать и в какие даты. Я подберу аудиторию и места размещения, подготовлю креативы, проверю всё и покажу, как реклама будет выглядеть, — сохраню только после вашего подтверждения." };
+
+const toItems = (t: TranscriptItem[] | undefined): ChatItem[] =>
+  [GREETING, ...(t ?? []).map(({ kind, text, results, rejected }) => ({ kind, text, results, rejected }))];
 
 export default function App() {
   const [page, setPage] = useState<Page>("assistant");
   const [role, setRole] = useState<Role>("campaignManager");
   const [query, setQuery] = useState("");
-  const [sid, setSid] = useState(newSid);
+  const [sid, setSid] = useState(() => storedSid() ?? newSid());
   const [state, setState] = useState<AgentState | null>(null);
   const [items, setItems] = useState<ChatItem[]>([GREETING]);
   const [dicts, setDicts] = useState<Dicts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<number | null>(null);
+  const [history, setHistory] = useState<HistoryItem[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const who = { user: USERS[role].user, role };
 
   useEffect(() => { api.dicts().then(setDicts).catch((e: Error) => setError(`Не удалось загрузить данные рекламного кабинета: ${e.message}`)); }, []);
+  useEffect(() => { rememberSid(sid); }, [sid]);
+
+  // После перезагрузки страницы — вернуть последний диалог со всей лентой.
+  useEffect(() => {
+    const saved = storedSid();
+    if (!saved) return;
+    agent.session(saved).then((s) => {
+      setState(s);
+      setItems(toItems(s.transcript));
+      if (s.campaign_id) setReviewId(s.campaign_id);
+    }).catch(() => undefined); // диалога уже нет (удалён) — начинаем с чистого листа
+  }, []);
+
+  const loadHistory = () => agent.sessions().then(setHistory).catch(() => setHistory([]));
 
   async function run(fn: () => Promise<AgentState>, userText?: string) {
     if (userText) setItems((m) => [...m, { kind: "user", text: userText }]);
@@ -37,12 +61,14 @@ export default function App() {
       const s = await fn();
       setState(s);
       if (s.campaign_id) setReviewId(s.campaign_id);
-      setItems((m) => {
+      if (s.transcript) setItems(toItems(s.transcript)); // лента с сервера — та же, что попадёт в историю
+      else setItems((m) => {
         const next = [...m];
         if (!userText && s.last_result?.length) next.push({ kind: "result", results: s.last_result });
         if (s.reply) next.push({ kind: "assistant", text: s.reply });
         return next;
       });
+      if (historyOpen) loadHistory();
       api.dicts().then(setDicts).catch(() => undefined); // могли появиться новые теги и места
     } catch (e) {
       setError((e as Error).message);
@@ -63,6 +89,36 @@ export default function App() {
     setSid(newSid());
     setState(null);
     setItems([GREETING]);
+    setHistoryOpen(false);
+  }
+
+  function toggleHistory() {
+    if (!historyOpen) { setHistory(null); loadHistory(); }
+    setHistoryOpen(!historyOpen);
+  }
+
+  async function openSession(id: string) {
+    setError(null);
+    try {
+      const s = await agent.session(id);
+      setSid(id);
+      setState(s);
+      setItems(toItems(s.transcript));
+      setReviewId(s.campaign_id ?? null);
+      setHistoryOpen(false);
+    } catch (e) {
+      setError(`Не удалось открыть диалог: ${(e as Error).message}`);
+    }
+  }
+
+  async function deleteSession(id: string) {
+    try {
+      await agent.deleteSession(id);
+      if (id === sid) { setSid(newSid()); setState(null); setItems([GREETING]); }
+      loadHistory();
+    } catch (e) {
+      setError(`Не удалось удалить диалог: ${(e as Error).message}`);
+    }
   }
 
   function openReview(id: number) {
@@ -93,7 +149,8 @@ export default function App() {
 
         {page === "assistant" && (
           <div className="page assistant">
-            <Chat items={items} busy={busy} plan={state?.pending_action ?? null} dicts={dicts} onSend={send} onDecide={decide} onReset={reset} />
+            <Chat items={items} busy={busy} plan={state?.pending_action ?? null} dicts={dicts} onSend={send} onDecide={decide} onReset={reset}
+              sid={sid} history={history} historyOpen={historyOpen} onToggleHistory={toggleHistory} onOpenSession={openSession} onDeleteSession={deleteSession} />
             <div className="col side-col">
               {state?.campaign ? (
                 <>

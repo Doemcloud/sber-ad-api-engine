@@ -10,18 +10,29 @@ const NAV: { page: Page; title: string; Icon: (p: { size?: number }) => JSX.Elem
   { page: "dicts", title: "Аудитории и размещение", Icon: IconDatabase },
 ];
 
+// Боковое меню: в покое — иконки, при наведении на любую его часть плавно раскрывается
+// поверх рабочей области и показывает подписи (раскладка страницы при этом не прыгает).
 export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page) => void }) {
   return (
     <aside className="sidebar">
-      <div className="brand" title="Рекламный кабинет СберБанк Онлайн">С</div>
-      <nav>
-        {NAV.map(({ page: p, title, Icon }) => (
-          <button key={p} className={`nav-btn ${page === p ? "active" : ""}`} title={title} aria-label={title} onClick={() => onNavigate(p)}>
-            <Icon size={20} />
-          </button>
-        ))}
-      </nav>
-      <button className="nav-btn bottom" title="Настройки" aria-label="Настройки" disabled><IconSettings size={20} /></button>
+      <div className="sidebar-panel">
+        <div className="side-row brand-row" title="Рекламный кабинет СберБанк Онлайн">
+          <div className="brand">С</div>
+          <div className="side-label brand-label"><b>Рекламный кабинет</b><span>СберБанк Онлайн</span></div>
+        </div>
+        <nav>
+          {NAV.map(({ page: p, title, Icon }) => (
+            <button key={p} className={`nav-btn ${page === p ? "active" : ""}`} aria-label={title} onClick={() => onNavigate(p)}>
+              <span className="nav-icon"><Icon size={20} /></span>
+              <span className="side-label">{title}</span>
+            </button>
+          ))}
+        </nav>
+        <button className="nav-btn bottom" aria-label="Настройки" disabled>
+          <span className="nav-icon"><IconSettings size={20} /></span>
+          <span className="side-label">Настройки</span>
+        </button>
+      </div>
     </aside>
   );
 }

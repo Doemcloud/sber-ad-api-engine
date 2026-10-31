@@ -137,10 +137,34 @@ export interface AgentState {
   pending_action: PendingAction | null;
   last_result: StepResult[];
   journal: JournalEntry[];
+  title?: string;
+  transcript?: TranscriptItem[];
+}
+
+// Лента диалога, которую хранит агент (для истории и восстановления после перезагрузки).
+export interface TranscriptItem {
+  kind: "user" | "assistant" | "result";
+  text?: string;
+  results?: StepResult[];
+  rejected?: string;
+  at: string;
+}
+
+export interface HistoryItem {
+  id: string;
+  title: string;
+  updated_at: string;
+  created_at: string;
+  user: string;
+  campaign_id: number | null;
+  campaign_name?: string | null;
+  messages: number;
+  pending: boolean;
 }
 
 export interface ChatItem {
   kind: "user" | "assistant" | "result";
   text?: string;
   results?: StepResult[];
+  rejected?: string;
 }
