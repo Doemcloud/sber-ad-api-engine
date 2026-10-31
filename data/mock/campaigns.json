@@ -1,0 +1,34 @@
+[
+  {
+    "id": "cmp_card_120",
+    "status": "active",
+    "name": "Кредитка 120 дней",
+    "advertiser_id": "adv_sber_cards",
+    "goal": "product_sales",
+    "object": "кредитная карта",
+    "offer": "120 дней без процентов",
+    "segment_ids": ["seg_no_credit_card"],
+    "placement_ids": ["pl_main_smart", "pl_stories"],
+    "budget_rub": 500000,
+    "start_date": "2026-10-15",
+    "end_date": "2026-11-30",
+    "creatives": [{"id": "cr_1", "placement_id": "pl_main_smart", "type": "smart_banner", "title": "120 дней без процентов", "text": "Оформите кредитную карту онлайн", "button": "Оформить"}],
+    "stats": {"impressions": 184000, "clicks": 3900, "conversions": 410}
+  },
+  {
+    "id": "cmp_azs_cashback",
+    "status": "active",
+    "name": "Кешбэк на АЗС",
+    "advertiser_id": "adv_azs_plus",
+    "goal": "visits",
+    "object": "топливо",
+    "offer": "кешбэк 7% на АЗС «Плюс»",
+    "segment_ids": ["seg_car_owners"],
+    "placement_ids": ["pl_main_smart"],
+    "budget_rub": 80000,
+    "start_date": "2026-10-20",
+    "end_date": "2026-11-20",
+    "creatives": [],
+    "stats": {"impressions": 52000, "clicks": 1100, "conversions": 240}
+  }
+]

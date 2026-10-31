@@ -1,0 +1,4 @@
+[
+  {"id": "adv_sber_cards", "name": "Сбер — Кредитные карты", "inn": "7707083893", "category": "финансы", "internal": true},
+  {"id": "adv_azs_plus", "name": "Сеть АЗС «Плюс»", "inn": "5401987654", "category": "авто", "locations": ["Новосибирск"], "internal": false}
+]
