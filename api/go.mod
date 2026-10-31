@@ -1,3 +1,3 @@
-module adcamp/api
+module adcamp
 
 go 1.24

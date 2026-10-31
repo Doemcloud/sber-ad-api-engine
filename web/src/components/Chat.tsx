@@ -1,53 +1,69 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, PendingAction } from "../types";
+import type { ChatItem, Dicts, PendingAction } from "../types";
+import { IconBot, IconSend } from "./Icons";
+import PlanCard from "./PlanCard";
+import { humanize } from "../ru";
 
 interface Props {
-  messages: ChatMessage[];
+  items: ChatItem[];
   busy: boolean;
-  pending: PendingAction[];
+  plan: PendingAction | null;
+  dicts: Dicts | null;
   onSend: (text: string) => void;
-  onConfirm: (actionId: string, ok: boolean) => void;
+  onDecide: (approved: boolean) => void;
+  onReset: () => void;
 }
 
-export default function Chat({ messages, busy, pending, onSend, onConfirm }: Props) {
+const EXAMPLES = [
+  "Кампания по вкладу для клиентов 26–45 в Москве и СПб, промо на главном, ставка 16%, с 5 ноября до конца года",
+  "Почему «Ипотека: ставка 4,9%» на доработке?",
+  "Можно ли запустить «Сомелье: подбор вина»?",
+];
+
+export default function Chat({ items, busy, plan, dicts, onSend, onDecide, onReset }: Props) {
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [messages, pending]);
+  useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [items, plan, busy]);
 
-  function submit(e: { preventDefault(): void }) {
-    e.preventDefault();
-    const t = text.trim();
-    if (!t || busy) return;
-    onSend(t);
+  function submit(t: string) {
+    const v = t.trim();
+    if (!v || busy) return;
+    onSend(v);
     setText("");
   }
 
   return (
-    <section className="chat">
+    <section className="panel chat">
+      <div className="panel-head"><h3><IconBot size={17} /> Ассистент</h3><button className="pill" onClick={onReset}>Новый диалог</button></div>
       <div className="messages">
-        {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>{m.text}</div>
-        ))}
-        {pending.map((a) => (
-          <div key={a.id} className="action">
-            <div className="action-title">{a.title}</div>
-            {Object.keys(a.payload).length > 0 && (
-              <pre>{JSON.stringify(a.payload, null, 2)}</pre>
-            )}
-            <div className="row">
-              <button disabled={busy} onClick={() => onConfirm(a.id, true)}>Подтвердить</button>
-              <button disabled={busy} className="ghost" onClick={() => onConfirm(a.id, false)}>Отклонить</button>
-            </div>
+        {items.map((m, i) => {
+          if (m.kind === "result") {
+            return (
+              <div key={i} className="result">
+                {(m.results ?? []).map((r) => (
+                  <div key={r.step} className={r.ok ? "ok" : "fail"}>
+                    {r.ok ? "✓" : "✗"} {humanize(r.summary, dicts)}
+                    {r.errors?.map((e, j) => <div key={j} className="hint">{humanize(e.message, dicts)}{e.hint ? ` — ${humanize(e.hint, dicts)}` : ""}</div>)}
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          return <div key={i} className={`msg ${m.kind}`}>{m.kind === "assistant" ? humanize(m.text, dicts) : m.text}</div>;
+        })}
+        {plan && <PlanCard plan={plan} dicts={dicts} busy={busy} onDecide={onDecide} />}
+        {busy && <div className="msg assistant typing">Ассистент думает…</div>}
+        {items.length <= 1 && (
+          <div className="examples">
+            {EXAMPLES.map((e) => <button key={e} className="example" onClick={() => submit(e)}>{e}</button>)}
           </div>
-        ))}
-        {busy && <div className="msg assistant typing">Думаю…</div>}
+        )}
         <div ref={end} />
       </div>
-      <form onSubmit={submit}>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
-          placeholder="Например: кофейня «Зерно» на Ленина, 12, скидка 20% на кофе с собой до 12:00, бюджет 30 000 ₽"
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) submit(e); }} />
-        <button type="submit" disabled={busy || !text.trim()}>Отправить</button>
+      <form onSubmit={(e) => { e.preventDefault(); submit(text); }}>
+        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Опишите задачу: продукт, аудитория, место размещения, сроки…"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(text); } }} />
+        <button type="submit" className="send" disabled={busy || !text.trim()} aria-label="Отправить"><IconSend size={18} /></button>
       </form>
     </section>
   );

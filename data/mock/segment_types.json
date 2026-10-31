@@ -1,0 +1,34 @@
+[
+  {
+    "code": "GEO_CITY",
+    "name": "Город"
+  },
+  {
+    "code": "GEO_REGION",
+    "name": "Регион"
+  },
+  {
+    "code": "AGE",
+    "name": "Возраст"
+  },
+  {
+    "code": "GENDER",
+    "name": "Пол"
+  },
+  {
+    "code": "INTEREST",
+    "name": "Интересы"
+  },
+  {
+    "code": "PRODUCT",
+    "name": "Продукты банка"
+  },
+  {
+    "code": "CHANNEL",
+    "name": "Канал обслуживания"
+  },
+  {
+    "code": "BASIC",
+    "name": "Базовые / исключения"
+  }
+]

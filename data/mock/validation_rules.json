@@ -1,0 +1,409 @@
+{
+  "_note": "РЕКОНСТРУКЦИЯ: оригинальный validation_rules.json (43 ошибки, 3 warning) не был в архиве. Коды из task.md сохранены, остальные добавлены командой. Заменить оригиналом, когда он появится.",
+  "errors": [
+    {
+      "code": "NAME_REQUIRED",
+      "group": "header",
+      "message": "Укажите название кампании",
+      "field": "name"
+    },
+    {
+      "code": "NAME_TOO_LONG",
+      "group": "header",
+      "message": "Название длиннее 100 символов",
+      "field": "name"
+    },
+    {
+      "code": "NAME_DUPLICATE",
+      "group": "header",
+      "message": "Кампания с таким названием уже есть",
+      "field": "name"
+    },
+    {
+      "code": "MARKETING_NAME_TOO_LONG",
+      "group": "header",
+      "message": "Рекламное название длиннее 100 символов",
+      "field": "marketingName"
+    },
+    {
+      "code": "START_DATE_REQUIRED",
+      "group": "header",
+      "message": "Укажите дату старта",
+      "field": "startDate"
+    },
+    {
+      "code": "START_TIME_REQUIRED",
+      "group": "header",
+      "message": "Укажите время старта",
+      "field": "startTime"
+    },
+    {
+      "code": "DATE_FORMAT_INVALID",
+      "group": "header",
+      "message": "Дата указана в неверном формате",
+      "field": "startDate"
+    },
+    {
+      "code": "TIME_FORMAT_INVALID",
+      "group": "header",
+      "message": "Время указано в неверном формате — нужно ЧЧ:ММ",
+      "field": "startTime"
+    },
+    {
+      "code": "END_TIME_WITHOUT_END_DATE",
+      "group": "header",
+      "message": "Указано время окончания, но нет даты окончания",
+      "field": "endTime"
+    },
+    {
+      "code": "DATE_RANGE_INVALID",
+      "group": "header",
+      "message": "Окончание показов должно быть позже старта",
+      "field": "endDate"
+    },
+    {
+      "code": "TOPIC_REQUIRED",
+      "group": "header",
+      "message": "Выберите тематику кампании",
+      "field": "topic"
+    },
+    {
+      "code": "TOPIC_INVALID",
+      "group": "header",
+      "message": "Такой тематики нет в списке",
+      "field": "topic"
+    },
+    {
+      "code": "KEYWORDS_TOO_LONG",
+      "group": "header",
+      "message": "Ключевые слова длиннее 512 символов",
+      "field": "keywords"
+    },
+    {
+      "code": "AUDIENCE_TYPE_REQUIRED",
+      "group": "header",
+      "message": "Выберите, кому показывать рекламу",
+      "field": "audienceType"
+    },
+    {
+      "code": "AUDIENCE_TYPE_INVALID",
+      "group": "header",
+      "message": "Неизвестный тип аудитории",
+      "field": "audienceType"
+    },
+    {
+      "code": "WEIGHT_INVALID",
+      "group": "header",
+      "message": "Приоритет показа должен быть числом от 0",
+      "field": "weight"
+    },
+    {
+      "code": "INITIAL_CTR_INVALID",
+      "group": "header",
+      "message": "Прогнозный CTR должен быть от 0 до 100%",
+      "field": "initialCtr"
+    },
+    {
+      "code": "SEGMENTS_REQUIRED",
+      "group": "audience",
+      "message": "Для таргетинга выберите хотя бы один сегмент",
+      "field": "segments.included"
+    },
+    {
+      "code": "SEGMENT_NOT_FOUND",
+      "group": "audience",
+      "message": "Такого сегмента нет",
+      "field": "segments"
+    },
+    {
+      "code": "SEGMENT_NOT_ACTIVE",
+      "group": "audience",
+      "message": "Сегмент ещё рассчитывается — выбрать его нельзя",
+      "field": "segments"
+    },
+    {
+      "code": "SEGMENT_DUPLICATE",
+      "group": "audience",
+      "message": "Сегмент одновременно в таргетинге и в исключениях",
+      "field": "segments"
+    },
+    {
+      "code": "SEGMENTS_FORBIDDEN_FOR_ALL_USERS",
+      "group": "audience",
+      "message": "При показе всем клиентам сегменты не выбираются",
+      "field": "segments"
+    },
+    {
+      "code": "PLACES_REQUIRED",
+      "group": "places",
+      "message": "Не выбрано ни одного места размещения",
+      "field": "places"
+    },
+    {
+      "code": "PLACE_CODE_REQUIRED",
+      "group": "places",
+      "message": "Укажите код места размещения",
+      "field": "code"
+    },
+    {
+      "code": "PLACE_DESCRIPTION_REQUIRED",
+      "group": "places",
+      "message": "Укажите название места размещения",
+      "field": "description"
+    },
+    {
+      "code": "PLACE_CODE_DUPLICATE",
+      "group": "places",
+      "message": "Такое место размещения уже есть",
+      "field": "code"
+    },
+    {
+      "code": "TAG_NAME_REQUIRED",
+      "group": "tags",
+      "message": "Укажите название тега",
+      "field": "name"
+    },
+    {
+      "code": "TAG_NAME_DUPLICATE",
+      "group": "tags",
+      "message": "Такой тег уже есть",
+      "field": "name"
+    },
+    {
+      "code": "BANNER_NAME_REQUIRED",
+      "group": "banner",
+      "message": "Укажите название баннера",
+      "field": "name"
+    },
+    {
+      "code": "BANNER_TYPE_REQUIRED",
+      "group": "banner",
+      "message": "Выберите формат баннера",
+      "field": "bannerTypeId"
+    },
+    {
+      "code": "BANNER_CONTENT_INVALID",
+      "group": "banner",
+      "message": "Баннер собран с ошибкой",
+      "field": "content"
+    },
+    {
+      "code": "BANNER_ACTION_TYPE_REQUIRED",
+      "group": "banner",
+      "message": "Не задано, что происходит по нажатию на баннер",
+      "field": "content.actionType"
+    },
+    {
+      "code": "ACTION_TYPE_INVALID",
+      "group": "banner",
+      "message": "Неизвестное действие по нажатию",
+      "field": "content.actionType"
+    },
+    {
+      "code": "BANNER_TITLE_TOO_LONG",
+      "group": "banner",
+      "message": "Заголовок длиннее, чем допускает формат",
+      "field": "content.title"
+    },
+    {
+      "code": "BANNER_TEXT_TOO_LONG",
+      "group": "banner",
+      "message": "Текст длиннее, чем допускает формат",
+      "field": "content.text"
+    },
+    {
+      "code": "STYLE_INVALID",
+      "group": "banner",
+      "message": "Недопустимое оформление текста: размер шрифта 10–40",
+      "field": "content.titleStyle"
+    },
+    {
+      "code": "COLOR_INVALID",
+      "group": "banner",
+      "message": "Цвет указан в неверном формате",
+      "field": "content.background.color"
+    },
+    {
+      "code": "IMAGE_URL_INVALID",
+      "group": "banner",
+      "message": "Нужна ссылка на изображение по https",
+      "field": "content.image.url"
+    },
+    {
+      "code": "LINK_REQUIRED",
+      "group": "banner",
+      "message": "Для перехода по нажатию нужна ссылка",
+      "field": "content.link"
+    },
+    {
+      "code": "LINK_FORBIDDEN",
+      "group": "banner",
+      "message": "Для кнопки «закрыть» или «завершить» ссылка не нужна",
+      "field": "content.link"
+    },
+    {
+      "code": "LINK_INVALID",
+      "group": "banner",
+      "message": "Ссылка указана неверно — нужны iOS, Android или веб",
+      "field": "content.link"
+    },
+    {
+      "code": "VOICE_OVER_TOO_LONG",
+      "group": "banner",
+      "message": "Текст для озвучки длиннее 200 символов",
+      "field": "content.voiceOver"
+    },
+    {
+      "code": "CONTENT_NAME_REQUIRED",
+      "group": "content",
+      "message": "Укажите название промо-экрана",
+      "field": "name"
+    },
+    {
+      "code": "CONTENT_TYPE_INVALID",
+      "group": "content",
+      "message": "Сейчас поддерживается только промо-экран",
+      "field": "contentType"
+    },
+    {
+      "code": "CONTENT_SCHEMA_INVALID",
+      "group": "content",
+      "message": "Промо-экран собран с ошибкой",
+      "field": "content"
+    },
+    {
+      "code": "CONTENT_COMPONENTS_COUNT",
+      "group": "content",
+      "message": "На промо-экране должно быть от 1 до 6 блоков",
+      "field": "content.component.components"
+    },
+    {
+      "code": "CONTENT_AXIS_INVALID",
+      "group": "content",
+      "message": "Блоки промо-экрана располагаются только вертикально",
+      "field": "content.component.axis"
+    },
+    {
+      "code": "CONTENT_ROLE_INVALID",
+      "group": "content",
+      "message": "На промо-экране допустимы только текст, картинка и кнопка",
+      "field": "content.component.components"
+    },
+    {
+      "code": "CONTENT_TEXT_FORMAT_REQUIRED",
+      "group": "content",
+      "message": "У текстового блока не указан формат",
+      "field": "content.component.components"
+    },
+    {
+      "code": "CONTENT_IMAGE_URL_REQUIRED",
+      "group": "content",
+      "message": "У картинки на промо-экране нет ссылки",
+      "field": "content.component.components"
+    },
+    {
+      "code": "CREATIVE_CHANNEL_NOT_ALLOWED",
+      "group": "creative",
+      "message": "Этот формат нельзя показывать на выбранной платформе",
+      "field": "channelCode"
+    },
+    {
+      "code": "CREATIVE_DUPLICATE",
+      "group": "creative",
+      "message": "Такой креатив для этой платформы уже есть",
+      "field": "channelCode"
+    },
+    {
+      "code": "CREATIVE_NAME_REQUIRED",
+      "group": "creative",
+      "message": "Укажите название креатива",
+      "field": "name"
+    },
+    {
+      "code": "UPDATE_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "В этом статусе кампанию нельзя изменить",
+      "field": "state"
+    },
+    {
+      "code": "TO_MODERATION_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Кампанию пока нельзя отправить на модерацию",
+      "field": "state"
+    },
+    {
+      "code": "DECLINE_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Вернуть на доработку можно только кампанию на модерации",
+      "field": "state"
+    },
+    {
+      "code": "DECLINE_COMMENT_REQUIRED",
+      "group": "lifecycle",
+      "message": "Напишите комментарий для менеджера",
+      "field": "comment"
+    },
+    {
+      "code": "APPROVE_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Одобрить можно только кампанию на модерации",
+      "field": "state"
+    },
+    {
+      "code": "TWO_HANDS_RULE",
+      "group": "lifecycle",
+      "message": "Нельзя одобрить кампанию, которую вы сами последним правили",
+      "field": "lastEditAuthor"
+    },
+    {
+      "code": "ACTIVATE_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Запустить можно только одобренную кампанию",
+      "field": "state"
+    },
+    {
+      "code": "STOP_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Остановить можно только кампанию, которая сейчас показывается",
+      "field": "published"
+    },
+    {
+      "code": "DELETE_NOT_ALLOWED",
+      "group": "lifecycle",
+      "message": "Удалить можно только черновик или кампанию на доработке, которая ни разу не показывалась",
+      "field": "state"
+    },
+    {
+      "code": "ROLE_FORBIDDEN",
+      "group": "access",
+      "message": "Это действие недоступно для вашей роли",
+      "field": "X-Role"
+    },
+    {
+      "code": "ENTITY_NOT_FOUND",
+      "group": "access",
+      "message": "Не найдено",
+      "field": null
+    },
+    {
+      "code": "BODY_INVALID",
+      "group": "request",
+      "message": "Некорректный запрос",
+      "field": null
+    }
+  ],
+  "warnings": [
+    {
+      "code": "PLACE_NO_CREATIVE",
+      "message": "Не для всех мест показа настроены креативы"
+    },
+    {
+      "code": "PLACE_INACTIVE",
+      "message": "Некоторые места показа деактивированы"
+    },
+    {
+      "code": "TAGS_MISSING",
+      "message": "У кампании отсутствуют теги"
+    }
+  ]
+}

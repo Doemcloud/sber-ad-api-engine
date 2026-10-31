@@ -4,9 +4,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
-	"adcamp/api/internal/httpapi"
-	"adcamp/api/internal/store"
+	"adcamp/internal/domain"
+	"adcamp/internal/httpapi"
+	"adcamp/internal/service"
+	"adcamp/internal/store"
 )
 
 func env(k, def string) string {
@@ -17,11 +20,15 @@ func env(k, def string) string {
 }
 
 func main() {
-	s, err := store.Open(env("SEED_DIR", "../data/mock"), env("STATE_DIR", "./state"))
+	mockDir := env("MOCK_DIR", "../data/mock")
+	if err := domain.LoadCatalog(filepath.Join(mockDir, "validation_rules.json")); err != nil {
+		log.Fatalf("каталог ошибок: %v", err)
+	}
+	st, err := store.Open(mockDir, env("STATE_FILE", "./state/state.json"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	addr := ":" + env("PORT", "8080")
-	log.Printf("api listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, (&httpapi.API{S: s}).Routes()))
+	log.Printf("campaigns API on %s (mocks: %s)", addr, mockDir)
+	log.Fatal(http.ListenAndServe(addr, (&httpapi.API{S: service.New(st)}).Routes()))
 }
