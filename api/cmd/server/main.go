@@ -26,9 +26,20 @@ func main() {
 	if err := domain.LoadCatalog(filepath.Join(mockDir, "validation_rules.json")); err != nil {
 		log.Fatalf("каталог ошибок: %v", err)
 	}
-	st, err := store.Open(mockDir, env("STATE_FILE", "./state/state.json"))
-	if err != nil {
-		log.Fatal(err)
+	var st *store.Store
+	var err error
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		st, err = store.OpenDB(mockDir, dsn)
+		if err != nil {
+			log.Fatalf("Pangolin DB: %v", err)
+		}
+		log.Printf("хранилище: Pangolin DB (%s)", store.DescribeDSN(dsn))
+	} else {
+		st, err = store.Open(mockDir, env("STATE_FILE", "./state/state.json"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("хранилище: файл (DATABASE_URL не задан)")
 	}
 	addr := ":" + env("PORT", "8080")
 	log.Printf("campaigns API on %s (mocks: %s)", addr, mockDir)

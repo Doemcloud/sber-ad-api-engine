@@ -35,7 +35,10 @@ type DayStat struct {
 
 type Stats struct {
 	CampaignID   int64     `json:"campaignId"`
-	Mode         string    `json:"mode"` // fact | forecast
+	Mode         string    `json:"mode"`        // fact | forecast
+	Period       string    `json:"period"`      // day | week | month | all
+	Granularity  string    `json:"granularity"` // hour | day
+	TotalDays    int       `json:"totalDays"`   // длина всего периода показа
 	From         string    `json:"from"`
 	To           string    `json:"to"`
 	Days         int       `json:"days"`
@@ -82,7 +85,7 @@ var (
 	platformLabel = map[string]string{"iOS": "iOS", "ANDROID": "Android", "WEB": "Веб-версия"}
 )
 
-func (s *Service) Stats(id int64) (*Stats, *domain.APIError) {
+func (s *Service) Stats(id int64, period string) (*Stats, *domain.APIError) {
 	det, e := s.Get(id)
 	if e != nil {
 		return nil, e
@@ -178,37 +181,80 @@ func (s *Service) Stats(id int64) (*Stats, *domain.APIError) {
 		conv *= 0.4 // без промо-экрана меньше целевых действий
 	}
 
-	st := &Stats{CampaignID: det.ID, Mode: mode, From: start.Format("2006-01-02"), To: start.AddDate(0, 0, days-1).Format("2006-01-02"), Days: days,
-		AudienceSize: round(audience), Reach: round(reach), Impressions: round(impressions), Clicks: round(clicks),
-		CTR: math.Round(ctr*100) / 100, Frequency: math.Round(freq*10) / 10, Conversions: round(conv)}
-
-	// --- по дням (до 30 последних) ---
-	shown := days
-	if shown > 30 {
-		shown = 30
-	}
-	first := days - shown // факт — последние дни, прогноз — первые
-	if mode == "forecast" {
-		first = 0
-	}
-	weights := make([]float64, shown)
+	// --- веса всех дней периода: будни активнее выходных, на старте — всплеск ---
+	weights := make([]float64, days)
 	var wsum float64
 	for i := range weights {
-		d := start.AddDate(0, 0, first+i)
+		d := start.AddDate(0, 0, i)
 		w := 1.0 + 0.12*math.Sin(float64(i)/2.3) + r.between(-0.08, 0.08)
 		if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
 			w *= 0.82
 		}
-		if first+i < 3 {
-			w *= 1.25 // на старте кампания показывается активнее
+		if i < 3 {
+			w *= 1.25
 		}
 		weights[i], wsum = w, wsum+w
 	}
-	part := float64(shown) / float64(days)
-	for i, w := range weights {
-		k := w / wsum * part
-		st.Daily = append(st.Daily, DayStat{Date: start.AddDate(0, 0, first+i).Format("2006-01-02"),
-			Impressions: round(impressions * k), Clicks: round(clicks * k * r.between(0.9, 1.1)), Reach: round(reach * k / freq * 1.6)})
+
+	// --- окно периода: день / неделя / месяц / весь период ---
+	n := map[string]int{"day": 1, "week": 7, "month": 30}[period]
+	if n == 0 || n > days {
+		n, period = days, "all"
+	}
+	first := days - n // факт — последние дни, прогноз — первые
+	if mode == "forecast" {
+		first = 0
+	}
+	var share float64
+	for _, w := range weights[first : first+n] {
+		share += w / wsum
+	}
+	wImp := impressions * share
+	wReach := math.Min(audience*(1-math.Exp(-daily*float64(n))), reach)
+	if wReach > wImp {
+		wReach = wImp
+	}
+	wClicks := clicks * share
+	wConv := conv * share
+	wFreq := 0.0
+	if wReach > 0 {
+		wFreq = wImp / wReach
+	}
+
+	st := &Stats{CampaignID: det.ID, Mode: mode, Period: period, Granularity: "day",
+		From: start.AddDate(0, 0, first).Format("2006-01-02"), To: start.AddDate(0, 0, first+n-1).Format("2006-01-02"), Days: n, TotalDays: days,
+		AudienceSize: round(audience), Reach: round(wReach), Impressions: round(wImp), Clicks: round(wClicks),
+		CTR: math.Round(ctr*100) / 100, Frequency: math.Round(wFreq*10) / 10, Conversions: round(wConv)}
+
+	if n == 1 { // за день — по часам: ночью почти нет показов, пики утром и вечером
+		var hs float64
+		hw := make([]float64, 24)
+		for h := range hw {
+			x := float64(h)
+			hw[h] = 0.08 + math.Exp(-math.Pow(x-9, 2)/6) + 1.25*math.Exp(-math.Pow(x-20, 2)/8) + 0.6*math.Exp(-math.Pow(x-13, 2)/5) + r.between(0, 0.05)
+			hs += hw[h]
+		}
+		day := start.AddDate(0, 0, first).Format("2006-01-02")
+		st.Granularity = "hour"
+		for h, w := range hw {
+			k := w / hs
+			st.Daily = append(st.Daily, DayStat{Date: fmt.Sprintf("%sT%02d:00", day, h),
+				Impressions: round(wImp * k), Clicks: round(wClicks * k * r.between(0.9, 1.1)), Reach: round(wReach * k * 1.1)})
+		}
+	} else {
+		shown := n
+		if shown > 31 {
+			shown = 31 // на графике — последние/первые 31 день окна
+		}
+		from := first
+		if mode == "fact" {
+			from = first + n - shown
+		}
+		for i := from; i < from+shown; i++ {
+			k := weights[i] / wsum
+			st.Daily = append(st.Daily, DayStat{Date: start.AddDate(0, 0, i).Format("2006-01-02"),
+				Impressions: round(impressions * k), Clicks: round(clicks * k * r.between(0.9, 1.1)), Reach: round(math.Min(impressions*k, reach*k/freq*1.6))})
+		}
 	}
 
 	// --- разбивки ---
@@ -287,7 +333,7 @@ func (s *Service) Stats(id int64) (*Stats, *domain.APIError) {
 	st.Places = normalize(pl, st.Impressions)
 
 	if mode == "forecast" {
-		st.Note = "Прогноз на весь период показа: кампания ещё не запущена. Оценка по размеру аудитории, местам размещения и платформам."
+		st.Note = "Прогноз: кампания ещё не запущена. Оценка по размеру аудитории, местам размещения и платформам."
 	} else {
 		st.Note = "Демо-данные: в прототипе статистика моделируется по аудитории и размещению кампании, в продуктиве её отдаёт система показов."
 	}

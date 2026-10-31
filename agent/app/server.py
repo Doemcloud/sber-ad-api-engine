@@ -41,6 +41,12 @@ def who(authorization: str | None) -> dict | None:
     return u
 
 
+def manager_only(me: dict | None) -> None:
+    """Ассистент — инструмент менеджера кампаний; у модератора своего чата нет."""
+    if me and me.get("role") != "campaignManager":
+        raise HTTPException(403, "Ассистент доступен менеджеру кампаний")
+
+
 def own(sid: str, me: dict | None):
     s = SESSIONS.get(sid)
     if not s:
@@ -83,6 +89,7 @@ def tools():
 @app.post("/chat")
 def chat(body: ChatIn, authorization: str | None = Header(default=None)):
     me = who(authorization)
+    manager_only(me)
     if me and body.session_id in SESSIONS:
         own(body.session_id, me)
     user, role = (me["user"], me["role"]) if me else (body.user, body.role)
@@ -92,6 +99,7 @@ def chat(body: ChatIn, authorization: str | None = Header(default=None)):
 @app.post("/confirm")
 def confirm(body: ConfirmIn, authorization: str | None = Header(default=None)):
     me = who(authorization)
+    manager_only(me)
     if me:
         own(body.session_id, me)
     try:
@@ -128,6 +136,7 @@ def open_campaign(sid: str, cid: int, authorization: str | None = Header(default
 def list_sessions(user: str | None = None, authorization: str | None = Header(default=None)):
     """История диалогов (панель «История» в разделе ассистента): у каждого — только свои."""
     me = who(authorization)
+    manager_only(me)
     return agent.history(me["user"] if me else user)
 
 

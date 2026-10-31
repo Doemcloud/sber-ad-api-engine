@@ -1,17 +1,36 @@
 services:
+  # Platform V Pangolin DB (СберТех, на основе PostgreSQL). Дистрибутив Pangolin выдаёт СберТех;
+  # получив образ, укажите его в PANGOLIN_IMAGE. По умолчанию — совместимый PostgreSQL 16 для локального запуска.
+  db:
+    image: ${PANGOLIN_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: adcamp
+      POSTGRES_USER: adcamp
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-adcamp}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adcamp -d adcamp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   api:
     build: ./api
     ports: ["8080:8080"]
     volumes:
       - ./data/mock:/data/mock:ro
-      - api-state:/state
     environment:
       PORT: 8080
       MOCK_DIR: /data/mock
-      STATE_FILE: /state/state.json
+      DATABASE_URL: postgres://adcamp:${DB_PASSWORD:-adcamp}@db:5432/adcamp?sslmode=disable
       AUTH_REQUIRED: "1"                                     # писать в API — только после входа
       AUTH_SECRET: ${AUTH_SECRET:-sber-ad-dev-secret-change-me}
       SERVICE_KEY: ${SERVICE_KEY:-sber-ad-service-key}      # агент действует от имени вошедшего
+    depends_on:
+      db:
+        condition: service_healthy
 
   agent:
     build: ./agent
@@ -39,5 +58,5 @@ services:
     depends_on: [agent, api]
 
 volumes:
-  api-state:
+  db-data:
   agent-state:

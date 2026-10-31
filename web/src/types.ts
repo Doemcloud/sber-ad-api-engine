@@ -176,7 +176,9 @@ export interface StatDay { date: string; impressions: number; clicks: number; re
 export interface CampaignStats {
   campaignId: number;
   mode: "fact" | "forecast";
-  from: string; to: string; days: number;
+  period: "day" | "week" | "month" | "all";
+  granularity: "hour" | "day";
+  from: string; to: string; days: number; totalDays: number;
   audienceSize: number; reach: number; impressions: number; clicks: number;
   ctr: number; frequency: number; conversions: number;
   daily: StatDay[];

@@ -11,6 +11,9 @@ import { IconShield } from "./components/Icons";
 import { Sidebar, Topbar, type Page } from "./components/Shell";
 import LoginPage from "./components/LoginPage";
 import StatsPage from "./components/StatsPage";
+import ModerationPage from "./components/ModerationPage";
+import SettingsPage from "./components/SettingsPage";
+import { loadPrefs } from "./prefs";
 
 const newSid = () => Math.random().toString(36).slice(2, 14);
 
@@ -35,7 +38,8 @@ export default function App() {
 function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
   SID_KEY = `sber-ad.assistant.sid.${auth.user.login}`; // у каждого пользователя — свой текущий диалог
   const role = auth.user.role;
-  const [page, setPage] = useState<Page>(role === "campaignModerator" ? "campaigns" : "assistant");
+  const manager = role === "campaignManager";
+  const [page, setPage] = useState<Page>(manager ? "assistant" : "moderation");
   const [query, setQuery] = useState("");
   const [sid, setSid] = useState(() => storedSid() ?? newSid());
   const [state, setState] = useState<AgentState | null>(null);
@@ -51,10 +55,10 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
 
   useEffect(() => { api.dicts().then(setDicts).catch((e: Error) => setError(`Не удалось загрузить данные рекламного кабинета: ${e.message}`)); }, []);
 
-  // После перезагрузки страницы — вернуть последний диалог со всей лентой.
+  // После перезагрузки страницы — вернуть последний диалог со всей лентой (ассистент — только у менеджера).
   useEffect(() => {
     const saved = storedSid();
-    if (!saved) return;
+    if (!saved || !manager) return;
     agent.session(saved).then((s) => {
       setState(s);
       setItems(toItems(s.transcript));
@@ -151,17 +155,17 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
 
   return (
     <div className="shell">
-      <Sidebar page={page} onNavigate={(p) => (p === "review" && !reviewId ? setPage("campaigns") : setPage(p))} />
+      <Sidebar page={page} role={role} onNavigate={(p) => (p === "review" && !reviewId ? setPage("campaigns") : setPage(p))} />
       <div className="workspace">
         <Topbar page={page} name={auth.user.name} title={auth.user.title} query={query} onLogout={onLogout}
-          onQuery={(q) => { setQuery(q); if (q && page === "assistant") setPage("campaigns"); }} />
+          onQuery={(q) => { setQuery(q); if (q && ["assistant", "settings", "review"].includes(page)) setPage("campaigns"); }} />
         {error && <div className="toast err">{error}</div>}
 
-        {page === "assistant" && (
+        {page === "assistant" && manager && (
           <div className="page assistant">
             <Chat items={items} busy={busy} plan={state?.pending_action ?? null} dicts={dicts} onSend={send} onDecide={decide} onReset={reset}
               sid={sid} history={history} historyOpen={historyOpen} onToggleHistory={toggleHistory} onOpenSession={openSession} onDeleteSession={deleteSession}
-              awaitingFix={!!state?.awaiting_fix} />
+              awaitingFix={!!state?.awaiting_fix} showExamples={loadPrefs().examples} />
             <div className="col side-col">
               {state?.campaign ? (
                 <>
@@ -188,10 +192,13 @@ function Cabinet({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
             </div>
           </div>
         )}
+        {page === "moderation" && !manager && <ModerationPage dicts={dicts} query={query} onOpen={openReview} />}
         {page === "campaigns" && <CampaignList dicts={dicts} query={query} onOpen={openReview} />}
-        {page === "review" && reviewId && <ReviewPage campaignId={reviewId} dicts={dicts} who={who} onAsk={ask} onBack={() => setPage("campaigns")} />}
+        {page === "review" && reviewId && <ReviewPage campaignId={reviewId} dicts={dicts} who={who} onAsk={manager ? ask : undefined}
+          onBack={() => setPage(manager ? "campaigns" : "moderation")} />}
         {page === "stats" && <StatsPage dicts={dicts} initialId={reviewId} query={query} />}
-        {page === "dicts" && <DictsPage dicts={dicts} query={query} />}
+        {page === "dicts" && manager && <DictsPage dicts={dicts} query={query} />}
+        {page === "settings" && <SettingsPage user={auth.user} onLogout={onLogout} onHistoryCleared={() => { forgetSid(); setSid(newSid()); setState(null); setItems([GREETING]); setHistory(null); }} />}
       </div>
     </div>
   );

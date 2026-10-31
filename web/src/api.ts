@@ -68,7 +68,7 @@ export const api = {
   campaign: (id: number) => req<CampaignDetails>(`${API_URL}/campaigns/${id}`),
   warnings: (id: number) => req<Validation>(`${API_URL}/campaigns/${id}/warnings`),
   audit: (id: number) => req<AuditEntry[]>(`${API_URL}/campaigns/${id}/audit`),
-  stats: (id: number) => req<CampaignStats>(`${API_URL}/campaigns/${id}/stats`),
+  stats: (id: number, period = "all") => req<CampaignStats>(`${API_URL}/campaigns/${id}/stats?period=${period}`),
   dicts: async (): Promise<Dicts> => {
     const [topics, tags, bannerTypes, segments, places] = await Promise.all([
       req<Topic[]>(`${API_URL}/topics`), req<Tag[]>(`${API_URL}/tags`), req<BannerType[]>(`${API_URL}/banner-types`),

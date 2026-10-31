@@ -11,11 +11,18 @@ interface Props { dicts: Dicts | null; query: string; onOpen: (id: number) => vo
 export default function CampaignList({ dicts, query, onOpen }: Props) {
   const [items, setItems] = useState<CampaignListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [topic, setTopic] = useState("");
 
   useEffect(() => { api.campaigns().then(setItems).catch((e: Error) => setError(e.message)); }, []);
 
   const q = query.trim().toLowerCase();
-  const shown = items.filter((c) => !q || c.name.toLowerCase().includes(q) || (STATE_RU[c.state] ?? "").toLowerCase().includes(q));
+  // Поиск по названию, тематике (по-русски) и статусу; несколько слов — все должны совпасть.
+  const shown = items.filter((c) => {
+    if (topic && c.topic !== topic) return false;
+    if (!q) return true;
+    const hay = `${c.name} ${topicLabel(c.topic, dicts)} ${STATE_RU[c.state] ?? ""} ${c.published ? "показы идут" : ""}`.toLowerCase();
+    return q.split(/\s+/).every((w) => hay.includes(w));
+  });
 
   return (
     <div className="page">
@@ -25,6 +32,13 @@ export default function CampaignList({ dicts, query, onOpen }: Props) {
           <h1>Кампании</h1>
           <p className="muted">Откройте кампанию, чтобы проверить готовность к модерации, посмотреть креативы и историю изменений.</p>
         </div>
+        <label className="filter">
+          <span>Тематика</span>
+          <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <option value="">Все тематики</option>
+            {(dicts?.topics ?? []).filter((t) => items.some((c) => c.topic === t.value)).map((t) => <option key={t.value} value={t.value}>{topicLabel(t.value, dicts)}</option>)}
+          </select>
+        </label>
       </div>
       {error && <div className="toast err">{error}</div>}
       <section className="panel">

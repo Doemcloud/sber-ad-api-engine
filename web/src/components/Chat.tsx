@@ -21,6 +21,7 @@ interface Props {
   onOpenSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   awaitingFix?: boolean; // план отменён — ассистент ждёт, что исправить
+  showExamples?: boolean;
 }
 
 const EXAMPLES = [
@@ -42,7 +43,7 @@ function whenLabel(iso: string) {
 }
 
 export default function Chat(props: Props) {
-  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix } = props;
+  const { items, busy, plan, dicts, onSend, onDecide, onReset, sid, history, historyOpen, onToggleHistory, onOpenSession, onDeleteSession, awaitingFix, showExamples = true } = props;
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -114,7 +115,7 @@ export default function Chat(props: Props) {
           })}
           {plan && <PlanCard plan={plan} dicts={dicts} busy={busy} onDecide={onDecide} />}
           {busy && <div className="msg assistant typing">Ассистент думает…</div>}
-          {items.length <= 1 && (
+          {items.length <= 1 && showExamples && (
             <div className="examples">
               {EXAMPLES.map((e) => <button key={e} className="example" onClick={() => submit(e)}>{e}</button>)}
             </div>

@@ -22,6 +22,7 @@ from pathlib import Path
 from . import validators as V
 from .api_client import ApiClient, ApiError
 from .explain import explain
+from .compliance import check_creative, check_message
 from .llm import LLM
 from .tools import TOOLS, schemas
 
@@ -115,6 +116,10 @@ class Agent:
     def __init__(self, api: ApiClient, llm: LLM, prompt_path: Path = PROMPT_PATH):
         self.api, self.llm = api, llm
         self.prompt = prompt_path.read_text(encoding="utf-8")
+        turn = prompt_path.parent / "turn.md"
+        # Служебная памятка, которая уходит модели вместе с каждым сообщением менеджера.
+        # В историю диалога и во фронт не попадает.
+        self.turn = turn.read_text(encoding="utf-8").strip() if turn.exists() else ""
         self.tools = schemas()
         self._dicts: dict | None = None
 
@@ -148,6 +153,17 @@ class Agent:
         return {"role": "system", "content": text}
 
     # ------------------------------------------------------------------ диалог
+    def _outgoing(self, s: Session) -> list[dict]:
+        """Что уходит модели: системный промпт + история, а к последнему сообщению
+        менеджера — служебная памятка. Копия: сохранённая история не меняется."""
+        msgs = [self._system(s)] + [dict(m) for m in s.messages]
+        if self.turn:
+            for m in reversed(msgs):
+                if m["role"] == "user":
+                    m["content"] = f"{m['content']}\n\n{self.turn}"
+                    break
+        return msgs
+
     def note(self, s: Session, item: dict) -> None:
         s.transcript.append({**item, "at": now()})
         s.updated_at = stamp()
@@ -167,6 +183,14 @@ class Agent:
             s.title = text.strip().replace("\n", " ")[:80]
         self.note(s, {"kind": "user", "text": text})
         save_sessions()  # реплика менеджера сохранена ещё до ответа модели
+        block = check_message(text)
+        if block:  # стоп-тема по закону о рекламе: отказ без обращения к модели
+            self.log(s, "compliance_refusal", block["id"])
+            s.awaiting_fix = None
+            s.messages.append({"role": "assistant", "content": block["reply"]})
+            self.note(s, {"kind": "assistant", "text": block["reply"]})
+            save_sessions()
+            return self.state(s, block["reply"])
         reply = self._run(s)
         if reply:
             self.note(s, {"kind": "assistant", "text": reply})
@@ -179,7 +203,7 @@ class Agent:
         start = len(s.messages)
         for _ in range(MAX_STEPS):
             try:
-                resp = self.llm.complete([self._system(s)] + s.messages, self.tools)
+                resp = self.llm.complete(self._outgoing(s), self.tools)
             except Exception as e:  # лимиты/сеть модели: ответить человеку, а не уронить сервис
                 self.log(s, "llm_error", str(e)[:300])
                 del s.messages[start:]  # недоделанный ход не оставляем в истории модели
@@ -235,6 +259,7 @@ class Agent:
             errs = V.validate_banner("preview", self._banner_type(a.get("bannerTypeId")), a.get("content"))
         else:
             errs = V.validate_content("preview", "PROMO", a.get("content"))
+        errs = errs + check_creative({"content": a.get("content")})
         return {"ok": not errs, "errors": explain(errs)}
 
     # ---- постановка шага в план с предварительной проверкой
@@ -361,6 +386,11 @@ class Agent:
             summary = labels.get(name, name)
             preview = {"kind": "transition" if not name.startswith("delete") else "delete", "tool": name}
 
+        if name in ("create_campaign", "update_campaign", "create_banner", "update_banner", "create_content", "update_content"):
+            law = check_creative({k: v for k, v in a.items() if k in ("campaign", "name", "marketingName", "keywords", "content")})
+            if law:  # стоп-темы и недостоверная реклама — шаг не попадает в план
+                self.log(s, "compliance_rejected_step", {"tool": name})
+                errs = errs + law
         if errs:
             self.log(s, "step_rejected_by_validation", {"tool": name, "errors": errs})
             return {"ok": False, "errors": explain(errs)}

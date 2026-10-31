@@ -12,10 +12,14 @@ const fmt = (n: number) =>
     : n >= 10_000 ? `${(n / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 0 })} тыс.`
       : n.toLocaleString("ru-RU");
 const pct = (x: number) => `${(x * 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`;
-const dayLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+// «14 окт.» для дней, «09:00» для часов (за день график почасовой).
+const dayLabel = (iso: string) => iso.includes("T") ? iso.slice(11, 16) : new Date(`${iso}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+
+type Period = "day" | "week" | "month" | "all";
+const PERIOD: Record<Period, string> = { day: "День", week: "Неделя", month: "Месяц", all: "Весь период" };
 
 type Metric = "impressions" | "reach" | "clicks";
-const METRIC: Record<Metric, string> = { impressions: "Показы", reach: "Охват за день", clicks: "Клики" };
+const METRIC: Record<Metric, string> = { impressions: "Показы", reach: "Охват", clicks: "Клики" };
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return <div className="stat-tile"><div className="stat-label">{label}</div><div className="stat-value">{value}</div>{hint && <div className="stat-hint">{hint}</div>}</div>;
@@ -109,6 +113,7 @@ export default function StatsPage({ initialId, query }: { dicts: Dicts | null; i
   const [metric, setMetric] = useState<Metric>("impressions");
   const [error, setError] = useState<string | null>(null);
   const [table, setTable] = useState(false);
+  const [period, setPeriod] = useState<Period>("week");
 
   useEffect(() => {
     api.campaigns().then((xs) => {
@@ -116,7 +121,7 @@ export default function StatsPage({ initialId, query }: { dicts: Dicts | null; i
       if (!id && xs.length) setId((xs.find((c) => c.published) ?? xs[0]).id); // по умолчанию — запущенная
     }).catch((e: Error) => setError(e.message));
   }, []);
-  useEffect(() => { if (id) { setSt(null); api.stats(id).then(setSt).catch((e: Error) => setError(e.message)); } }, [id]);
+  useEffect(() => { if (id) { setError(null); api.stats(id, period).then(setSt).catch((e: Error) => setError(e.message)); } }, [id, period]);
 
   const q = query.trim().toLowerCase();
   const shown = useMemo(() => list.filter((c) => !q || c.name.toLowerCase().includes(q)), [list, q]);
@@ -142,9 +147,14 @@ export default function StatsPage({ initialId, query }: { dicts: Dicts | null; i
         {cur && (
           <div className="page-head">
             <div>
-              <div className="eyebrow">{fact ? "Факт" : "Прогноз"}{st ? ` · ${fmtDate(st.from)} — ${fmtDate(st.to)} · ${st.days} ${plural(st.days, "день", "дня", "дней")}` : ""}</div>
+              <div className="eyebrow">{fact ? "Факт" : "Прогноз"}{st ? ` · ${st.days === 1 ? fmtDate(st.from) : `${fmtDate(st.from)} — ${fmtDate(st.to)}`}` : ""}</div>
               <h1>{cur.name}</h1>
               {st && <p className="muted">{st.note}</p>}
+            </div>
+            <div className="segmented period" role="tablist" aria-label="Период">
+              {(Object.keys(PERIOD) as Period[]).map((p) => (
+                <button key={p} role="tab" aria-selected={period === p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)}>{PERIOD[p]}</button>
+              ))}
             </div>
           </div>
         )}
@@ -161,7 +171,8 @@ export default function StatsPage({ initialId, query }: { dicts: Dicts | null; i
 
             <section className="panel pad stat-card">
               <div className="panel-row">
-                <h3>{fact ? "Динамика по дням" : "Ожидаемая динамика"}{st.daily.length < st.days ? ` · ${fact ? "последние" : "первые"} ${st.daily.length} ${plural(st.daily.length, "день", "дня", "дней")}` : ""}</h3>
+                <h3>{st.granularity === "hour" ? (fact ? "По часам за день" : "Ожидаемо по часам в первый день")
+                  : `${fact ? "Динамика по дням" : "Ожидаемая динамика"}${st.daily.length < st.days ? ` · ${fact ? "последние" : "первые"} ${st.daily.length} ${plural(st.daily.length, "день", "дня", "дней")}` : ""}`}</h3>
                 <div className="row">
                   <div className="segmented small">
                     {(Object.keys(METRIC) as Metric[]).map((m) => <button key={m} className={metric === m ? "on" : ""} onClick={() => setMetric(m)}>{METRIC[m]}</button>)}
@@ -172,7 +183,7 @@ export default function StatsPage({ initialId, query }: { dicts: Dicts | null; i
               {table ? (
                 <div className="stats-table-wrap">
                   <table className="table">
-                    <thead><tr><th>День</th><th>Показы</th><th>Охват</th><th>Клики</th></tr></thead>
+                    <thead><tr><th>{st.granularity === "hour" ? "Час" : "День"}</th><th>Показы</th><th>Охват</th><th>Клики</th></tr></thead>
                     <tbody>{st.daily.map((d) => <tr key={d.date}><td>{dayLabel(d.date)}</td><td>{d.impressions.toLocaleString("ru-RU")}</td><td>{d.reach.toLocaleString("ru-RU")}</td><td>{d.clicks.toLocaleString("ru-RU")}</td></tr>)}</tbody>
                   </table>
                 </div>

@@ -10,7 +10,7 @@ interface Props {
   campaignId: number;
   dicts: Dicts | null;
   who: Who;
-  onAsk: (prompt: string) => void;
+  onAsk?: (prompt: string) => void; // нет у модератора: ассистент — инструмент менеджера
   onBack: () => void;
 }
 
@@ -29,7 +29,7 @@ const DECLINE_REASONS = [
 ];
 const EDITABLE = ["DRAFT", "NEEDS_WORK", "APPROVED", "ACTIVE", "ACTIVE_EDITING"];
 
-function Row({ it, onAsk }: { it: CheckItem; onAsk: (p: string) => void }) {
+function Row({ it, onAsk }: { it: CheckItem; onAsk?: (p: string) => void }) {
   return (
     <div className={`check ${it.status}`}>
       <span className="check-icon">{ICON[it.status]}</span>
@@ -37,7 +37,7 @@ function Row({ it, onAsk }: { it: CheckItem; onAsk: (p: string) => void }) {
         <div className="check-title">{it.title}</div>
         <div className="check-detail">{it.detail}</div>
       </div>
-      {it.action && <button className={`pill ${it.status === "error" || it.status === "warn" ? it.status : ""}`} onClick={() => onAsk(it.action!.prompt)}>{it.action.label}</button>}
+      {it.action && onAsk && <button className={`pill ${it.status === "error" || it.status === "warn" ? it.status : ""}`} onClick={() => onAsk(it.action!.prompt)}>{it.action.label}</button>}
     </div>
   );
 }
@@ -83,7 +83,7 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
       <div className="page-head">
         <div>
           <div className="eyebrow"><span className={`dot-state st-${c.state}`} /> {STATE_RU[c.state]}{c.published && " · показы идут"}</div>
-          <h1>{EDITABLE_FOR_SUBMIT.includes(c.state) ? "Готова к модерации?" : c.name}</h1>
+          <h1>{!onAsk ? `Проверка: ${c.name}` : EDITABLE_FOR_SUBMIT.includes(c.state) ? "Готова к модерации?" : c.name}</h1>
           <p className="muted">{EDITABLE_FOR_SUBMIT.includes(c.state)
             ? `«${c.name}» — всё, что нужно проверить, прежде чем кампания попадёт к модератору.`
             : "Проверка кампании и действия, доступные в текущем статусе."}</p>
@@ -102,7 +102,7 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
             <div className="panel-head"><h3>Чек-лист готовности</h3><span className="muted small">Проверено в {checked.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span></div>
             {c.state === "NEEDS_WORK" && lastDecline?.comment && (
               <div className="moderator-note"><IconAlertTriangle size={15} /><div><b>Комментарий модератора ({person(lastDecline.actor)}):</b> «{lastDecline.comment}»</div>
-                <button className="pill warn" onClick={() => onAsk(`Кампания «${c.name}»: исправь замечания модератора — «${lastDecline.comment}»`)}>Исправить</button></div>
+                {onAsk && <button className="pill warn" onClick={() => onAsk(`Кампания «${c.name}»: исправь замечания модератора — «${lastDecline.comment}»`)}>Исправить</button>}</div>
             )}
             {sections.map((s) => (
               <div key={s.title}>
@@ -114,7 +114,7 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
 
           <section className="panel">
             <div className="panel-head"><h3>Как увидит клиент</h3><span className="muted small">{c.creatives.length} {plural(c.creatives.length, "креатив", "креатива", "креативов")}</span></div>
-            {c.banners.length === 0 && <div className="empty-row">Креативов пока нет — <button className="link" onClick={() => onAsk(`Кампания «${c.name}»: создай баннер, промо-экран и креативы для всех мест размещения`)}>создать с ассистентом</button></div>}
+            {c.banners.length === 0 && <div className="empty-row">Креативов пока нет{onAsk && <> — <button className="link" onClick={() => onAsk(`Кампания «${c.name}»: создай баннер, промо-экран и креативы для всех мест размещения`)}>создать с ассистентом</button></>}</div>}
             <div className="previews-row">
               {c.banners.map((b) => {
                 const crs = c.creatives.filter((x) => x.bannerId === b.id);
@@ -163,7 +163,7 @@ export default function ReviewPage({ campaignId, dicts, who, onAsk, onBack }: Pr
               <div className="seg-list">
                 {c.segments.included.map((code, i) => <span key={code} className="chip in">{included[i]?.name ?? code} · {fmtReach(included[i]?.count ?? 0)}</span>)}
                 {c.segments.excluded.map((code) => <span key={code} className="chip out">без: {dicts?.segments.find((s) => s.code === code)?.name.replace("Исключение. ", "").toLowerCase() ?? code}</span>)}
-                <button className="link" onClick={() => onAsk(`Кампания «${c.name}»: хочу изменить сегменты`)}>изменить с ассистентом</button>
+                {onAsk && <button className="link" onClick={() => onAsk(`Кампания «${c.name}»: хочу изменить сегменты`)}>изменить с ассистентом</button>}
               </div>
             )}
             {c.audienceType === "SEGMENTED" && c.segments.included.length > 1 && (
@@ -192,6 +192,19 @@ interface SubmitProps {
 function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, comment, setComment, onAction }: SubmitProps) {
   const manager = who.role === "campaignManager";
   const [declining, setDeclining] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  // Остановка показов — для идущих показов в любом статусе (в т.ч. «Запущена, есть правки»), с подтверждением.
+  const stopBlock = c.published && manager ? (!stopping ? (
+    <button className="cta danger-outline" disabled={busy} onClick={() => setStopping(true)}>Остановить показы</button>
+  ) : (
+    <div className="stop-confirm">
+      <div className="decline-label">Остановить показы «{c.name}»? Клиенты перестанут видеть рекламу сразу. Запустить эту кампанию снова будет нельзя — только создать новую.</div>
+      <div className="row">
+        <button className="cta danger" disabled={busy} onClick={() => { setStopping(false); onAction("stop"); }}>Да, остановить показы</button>
+        <button className="cta ghost" disabled={busy} onClick={() => setStopping(false)}>Отмена</button>
+      </div>
+    </div>
+  )) : null;
   const toggleReason = (r: string) => {
     const parts = comment.split(/;\s*/).map((x) => x.trim()).filter(Boolean);
     setComment((parts.includes(r) ? parts.filter((x) => x !== r) : [...parts, r]).join("; "));
@@ -201,7 +214,9 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
   let foot = "";
 
   if (EDITABLE_FOR_SUBMIT.includes(c.state)) {
-    head = blockers
+    head = c.state === "ACTIVE_EDITING" && !blockers
+      ? { tone: "ok", title: "Показы идут, есть правки", text: "Клиенты видят прежнюю версию. Отправьте правки на модерацию — после одобрения они попадут в показ." }
+      : blockers
       ? { tone: "err", title: "Отправка на модерацию недоступна", text: `${blockers} ${plural(blockers, "ошибка мешает", "ошибки мешают", "ошибок мешают")} передать кампанию модератору.` }
       : { tone: "ok", title: "Можно отправлять на модерацию", text: "Ошибок нет. Модератор получит кампанию в текущем виде." };
     body = (
@@ -211,9 +226,10 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
             <span>Я видел замечания и отправляю кампанию с ними: {warnings.join("; ").toLowerCase()}.</span></label>
         )}
         <button className="cta" disabled={!canSubmit || !manager || busy} onClick={() => onAction("to-moderation")}><IconRocket size={17} /> Отправить на модерацию</button>
+        {c.published && <div className="stop-sep">{stopBlock}</div>}
       </>
     );
-    foot = !manager ? "Отправляет менеджер кампании — смените роль." : blockers ? `Исправьте ${blockers} ${plural(blockers, "ошибку", "ошибки", "ошибок")} — кнопка станет доступна автоматически.` : warnings.length && !ack ? "Отметьте, что видели замечания." : "Действие сохранится в истории изменений от вашего имени.";
+    foot = !manager ? "Отправляет на модерацию менеджер кампании." : blockers ? `Исправьте ${blockers} ${plural(blockers, "ошибку", "ошибки", "ошибок")} — кнопка станет доступна автоматически.` : warnings.length && !ack ? "Отметьте, что видели замечания." : "Действие сохранится в истории изменений от вашего имени.";
   } else if (c.state === "ON_MODERATION") {
     head = { tone: "info", title: "На модерации", text: "Кампания ждёт решения модератора. Вносить правки сейчас нельзя." };
     body = who.role !== "campaignModerator" ? null : !declining ? (
@@ -245,14 +261,9 @@ function SubmitCard({ c, who, blockers, warnings, ack, setAck, canSubmit, busy, 
     body = <button className="cta" disabled={!manager || busy} onClick={() => onAction("activate")}><IconRocket size={17} /> Запустить кампанию</button>;
     foot = "Любая правка сейчас снимет одобрение — кампанию придётся снова отправить на модерацию.";
   } else if (c.published) {
-    head = { tone: "ok", title: "Показы идут", text: c.state === "ACTIVE_EDITING" ? "Есть правки, которые клиенты ещё не видят, — отправьте их на модерацию." : "Кампания показывается клиентам." };
-    body = (
-      <>
-        <label className="ack"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /><span>Понимаю: остановленную кампанию нельзя запустить снова.</span></label>
-        <button className="cta danger" disabled={!manager || !ack || busy} onClick={() => onAction("stop")}>Остановить показы</button>
-      </>
-    );
-    foot = "После остановки кампания останется в списке и истории, но перестанет показываться.";
+    head = { tone: "ok", title: "Показы идут", text: "Кампания показывается клиентам." };
+    body = stopBlock;
+    foot = manager ? "После остановки кампания останется в списке и истории, но перестанет показываться." : "Остановить показы может менеджер кампании.";
   } else {
     head = { tone: "info", title: STATE_RU[c.state] ?? c.state, text: "Кампания остановлена: её нельзя изменить или запустить снова." };
   }

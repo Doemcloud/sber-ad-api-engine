@@ -1,5 +1,6 @@
-// Package store — хранилище MVP: всё состояние в памяти, сид из mocks/,
-// снимок в JSON-файл после каждой записи. Заменяется на СУБД без правок service.
+// Package store — хранилище: рабочее состояние в памяти под общей блокировкой,
+// постоянное хранение — Platform V Pangolin DB (pg.go, при заданном DATABASE_URL)
+// или, для тестов и запуска без СУБД, снимок в JSON-файл. Сид — из mocks/.
 package store
 
 import (
@@ -38,6 +39,7 @@ type Store struct {
 	mu        sync.Mutex
 	S         *State
 	statePath string
+	pg        *pgBackend // Pangolin DB; nil — режим без СУБД
 }
 
 // Lock/Unlock — сервис держит блокировку на всю операцию (проверка + запись).
@@ -190,8 +192,11 @@ func (st *Store) Next(kind string) int64 {
 	return id
 }
 
-// Save пишет снимок состояния (атомарно через временный файл).
+// Save фиксирует состояние: в Pangolin DB транзакцией, иначе снимком в файл (атомарно).
 func (st *Store) Save() error {
+	if st.pg != nil {
+		return st.pg.save(st.S)
+	}
 	if st.statePath == "" {
 		return nil
 	}

@@ -90,7 +90,7 @@ func (a *API) Routes() http.Handler {
 	}))
 
 	m.HandleFunc("GET /campaigns/{id}/warnings", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Warnings(id(r)) }))
-	m.HandleFunc("GET /campaigns/{id}/stats", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Stats(id(r)) }))
+	m.HandleFunc("GET /campaigns/{id}/stats", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Stats(id(r), r.URL.Query().Get("period")) }))
 	m.HandleFunc("GET /campaigns/{id}/audit", a.read(func(r *http.Request) (any, *domain.APIError) { return a.S.Audit(id(r)) }))
 
 	// жизненный цикл
